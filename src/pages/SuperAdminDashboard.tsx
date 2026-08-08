@@ -788,7 +788,7 @@ export default function SuperAdminDashboard() {
                             </div>
                             <div className="flex gap-0.5">
                               {[1, 2, 3, 4, 5].map((star) => (
-                                <StarIcon key={star} className={`w-3.5 h-3.5 ${star <= r.rating ? "fill-amber-400 text-amber-400" : "text-white/10"}`} />
+                                <StarIcon key={star} className={`w-3.5 h-3.5 ${star <= r.rating ? "fill-amber-400 text-amber-400" : "text-slate-400"}`} />
                               ))}
                             </div>
                           </div>

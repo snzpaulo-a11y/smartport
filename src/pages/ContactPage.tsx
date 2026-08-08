@@ -16,7 +16,7 @@ const ContactPage = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-[#0E151E] flex flex-col text-white font-body overflow-x-hidden">
+    <div className="min-h-screen bg-[#0E151E] flex flex-col text-white font-body overflow-x-hidden pb-nav">
       <PassengerHeader />
 
       <section className="py-20 px-4 sm:px-8 relative z-10">

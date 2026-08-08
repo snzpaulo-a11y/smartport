@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 /** @tailwind base; */
 @import "tailwindcss/base";
@@ -281,4 +281,44 @@ button:disabled, .cursor-not-allowed {
   border-color: #e5e7eb !important;
   opacity: 0.85 !important;
   cursor: not-allowed !important;
+}
+/* MOBILE SAFE-AREA & VIEWPORT UTILITIES */
+
+@layer utilities {
+  .pb-safe  { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe  { padding-top: env(safe-area-inset-top); }
+  .pl-safe  { padding-left: env(safe-area-inset-left); }
+  .pr-safe  { padding-right: env(safe-area-inset-right); }
+  .px-safe  { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+}
+
+/* Dynamic viewport height so fixed bars never sit behind mobile browser chrome */
+@supports (min-height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
+/* Prevent horizontal shake when the layout is a hair wider than the viewport */
+html, body, #root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Stops rubber-band/overscroll from revealing the page background behind fixed bars */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe-area with a minimum so non-notched devices still keep a comfortable gap */
+@layer utilities {
+  .pt-safe-lg { padding-top: max(env(safe-area-inset-top), 1rem); }
+  .pb-safe-lg { padding-bottom: max(env(safe-area-inset-bottom), 1rem); }
+}
+
+/* Clear fixed bottom nav (approx nav height + safe area) so nothing gets covered */
+@layer utilities {
+  .pb-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 6rem); }
 }

@@ -5,7 +5,7 @@ import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, getShipS
 import { ArrowLeft, Loader2, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
 import BiometricScanner from "@/components/BiometricScanner";
 
-// ── Seat button ────────────────────────────────────────────────────────────
+// â”€â”€ Seat button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SeatButton = ({
   seat, selected, onToggle,
 }: {
@@ -30,14 +30,14 @@ const SeatButton = ({
       <span className="text-sm font-bold leading-none">{seat.label}</span>
       {isBunk && (
         <span className={`text-[9px] font-semibold mt-0.5 ${isUpper ? "text-amber-400" : "text-sky-400"}`}>
-          {isUpper ? "▲ UPPER" : "▼ LOWER"}
+          {isUpper ? "â–² UPPER" : "â–¼ LOWER"}
         </span>
       )}
     </button>
   );
 };
 
-// ── Main component ─────────────────────────────────────────────────────────
+// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SeatSelection = () => {
   const { shipId }   = useParams<{ shipId: string }>();
   const navigate     = useNavigate();
@@ -205,7 +205,7 @@ const SeatSelection = () => {
   return (
     <div className="min-h-screen bg-[#0A1118] text-white font-body pb-12">
       
-      {/* ── Top Header ── */}
+      {/* â”€â”€ Top Header â”€â”€ */}
       <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-4">
           <button 
@@ -226,7 +226,7 @@ const SeatSelection = () => {
         </div>
       </header>
 
-      {/* ── Progress Tracker ── */}
+      {/* â”€â”€ Progress Tracker â”€â”€ */}
       <div className="flex flex-col items-center mt-8 mb-12 max-w-sm mx-auto w-full px-8 hidden sm:flex">
         <div className="flex items-center justify-between w-full relative">
           <div className="absolute top-1/2 left-0 w-full h-px border-t border-dashed border-[#8895A7]/30 -z-10" />
@@ -250,7 +250,7 @@ const SeatSelection = () => {
 
       <AnimatePresence mode="wait">
 
-        {/* ══ MOCKUP 6: PASSENGER DETAILS ══ */}
+        {/* â•â• MOCKUP 6: PASSENGER DETAILS â•â• */}
         {step === "passenger" && selectedSeat && (
           <motion.div key="passenger" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}
             className="max-w-2xl mx-auto px-4 w-full flex flex-col gap-8 pb-32">
@@ -280,7 +280,7 @@ const SeatSelection = () => {
                     if (stops.length <= 2) {
                       return boardStop && alightStop && (
                         <span className="flex items-center gap-1.5 text-[#E3000F] font-bold">
-                          <Route className="w-4 h-4" /> {boardStop} → {alightStop}
+                          <Route className="w-4 h-4" /> {boardStop} â†’ {alightStop}
                         </span>
                       );
                     }
@@ -775,10 +775,10 @@ const SeatSelection = () => {
           }}
         />
 
-        {/* ══ STEP 2: CHOOSE ACCOMMODATION TYPE ══ */}
+        {/* â•â• STEP 2: CHOOSE ACCOMMODATION TYPE â•â• */}
         {step === "type" && (
           <motion.div key="type" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}
-            className="max-w-xl mx-auto px-4 w-full">
+            className="max-w-xl mx-auto px-4 w-full pb-nav">
             <h2 className="text-white text-3xl font-extrabold mb-1">Choose your accommodation</h2>
             <p className="text-white/60 text-sm mb-8">Select how you'd like to travel on this trip.</p>
 
@@ -831,10 +831,10 @@ const SeatSelection = () => {
           </motion.div>
         )}
 
-        {/* ══ STEP 3: SEAT SELECTION ══ */}
+        {/* â•â• STEP 3: SEAT SELECTION â•â• */}
         {step === "seat" && (
           <motion.div key="seat" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}
-            className="max-w-xl mx-auto px-4 w-full">
+            className="max-w-xl mx-auto px-4 w-full pb-nav">
             <h2 className="text-white text-2xl font-extrabold mb-1">Select your {seatTypeChoice === "bunk" ? "bed" : "seat"}</h2>
             <p className="text-white/60 text-sm mb-6">
               Selected <span className="text-[#E3000F] font-bold">{selectedSeatIds.length}</span> of <span className="text-[#E3000F] font-bold">{routeTotal}</span> required {routeTotal === 1 ? "seat" : "seats"}.
@@ -888,20 +888,22 @@ const SeatSelection = () => {
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-0 left-0 w-full bg-[#131B24]/90 backdrop-blur-xl border-t border-white/5 z-50 sm:hidden">
-        <div className="max-w-md mx-auto flex items-center justify-around py-3 px-2">
-          <button onClick={() => navigate("/booking")} className="flex flex-col items-center gap-1.5 text-[#8895A7] hover:text-white transition-colors w-16">
-            <Home className="w-[22px] h-[22px]" /><span className="text-[8px] font-bold tracking-widest uppercase">Home</span>
-          </button>
-          <button className="flex flex-col items-center gap-1.5 bg-[#280A0D] text-[#E3000F] rounded-2xl w-24 py-2 border border-[#E3000F]/20 shadow-[0_0_15px_rgba(227, 0, 15,0.15)] relative -top-3">
-            <ShipIcon className="w-6 h-6" fill="currentColor" strokeWidth={1} /><span className="text-[8px] font-bold tracking-widest uppercase">Bookings</span>
-          </button>
-          <button className="flex flex-col items-center gap-1.5 text-[#8895A7] hover:text-white transition-colors w-16">
-            <Calendar className="w-[22px] h-[22px]" /><span className="text-[8px] font-bold tracking-widest uppercase">Schedule</span>
-          </button>
-          <button className="flex flex-col items-center gap-1.5 text-[#8895A7] hover:text-white transition-colors w-16">
-            <User className="w-[22px] h-[22px]" /><span className="text-[8px] font-bold tracking-widest uppercase">Profile</span>
-          </button>
+      <div className="fixed bottom-0 left-0 w-full z-50 sm:hidden pb-safe px-3">
+        <div className="max-w-md mx-auto bg-white/55 backdrop-blur-2xl border border-white/60 shadow-[0_-4px_24px_rgba(0,0,0,0.18),0_8px_32px_rgba(0,0,0,0.10)] rounded-[26px] px-2 py-2">
+          <div className="flex items-center justify-between gap-1">
+            <button onClick={() => navigate("/booking")} className="flex-1 flex flex-col items-center justify-center gap-1 min-h-12 group">
+              <Home className="w-[22px] h-[22px] text-slate-600 group-hover:text-[#E3000F] transition-colors" strokeWidth={2} /><span className="text-[10px] font-bold tracking-[0.06em] uppercase text-slate-600">Home</span>
+            </button>
+            <button className="flex-1 flex flex-col items-center justify-center gap-1 bg-[#E3000F] text-white rounded-2xl min-h-12 shadow-[0_8px_20px_rgba(227,0,15,0.35)]">
+              <ShipIcon className="w-6 h-6" fill="currentColor" strokeWidth={1.6} /><span className="text-[10px] font-bold tracking-[0.06em] uppercase">Bookings</span>
+            </button>
+            <button className="flex-1 flex flex-col items-center justify-center gap-1 min-h-12 group">
+              <Calendar className="w-[22px] h-[22px] text-slate-600 group-hover:text-[#E3000F] transition-colors" strokeWidth={2} /><span className="text-[10px] font-bold tracking-[0.06em] uppercase text-slate-600">Schedule</span>
+            </button>
+            <button className="flex-1 flex flex-col items-center justify-center gap-1 min-h-12 group">
+              <User className="w-[22px] h-[22px] text-slate-600 group-hover:text-[#E3000F] transition-colors" strokeWidth={2} /><span className="text-[10px] font-bold tracking-[0.06em] uppercase text-slate-600">Profile</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

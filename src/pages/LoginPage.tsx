@@ -423,13 +423,20 @@ export default function LoginPage() {
       <div className="w-full max-w-[420px] relative z-10 flex flex-col items-center">
 
         <div className="flex flex-col items-center mb-10 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#E3000F] flex items-center justify-center text-white p-2 shadow-[0_0_30px_rgba(227, 0, 15,0.2)]">
-            <svg viewBox="0 0 100 100" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="50,5 95,50 50,95 5,50" fill="#FFFFFF" />
-              <path d="M48,22 C53,22 62,25 65,30 C60,32 58,35 56,38 C60,37 62,38 63,41 C64,43 61,46 62,49 C59,48 57,48 55,47 C57,51 57,54 55,57 C53,59 50,58 48,56 C46,55 45,52 45,49 C42,50 40,51 38,50 C36,49 35,46 36,43 C37,39 39,36 42,35 C40,32 41,29 43,26 C45,23 46,22 48,22 Z" fill="#E3000F" />
-              <path d="M45,49 C42,55 35,62 25,65 C32,68 37,70 42,72 C35,74 28,76 20,77 C28,80 36,81 44,82 C38,84 32,86 25,87 C38,89 48,85 53,80 C58,75 58,68 56,57 Z" fill="#E3000F" />
-            </svg>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.6, type: "spring", stiffness: 200, damping: 16 }}
+            className="w-20 h-20 rounded-2xl bg-white shadow-[0_0_40px_rgba(227,0,15,0.25)] p-1.5 flex items-center justify-center"
+          >
+            <motion.img
+              src="/starhorse-logo.jpg"
+              alt="Starhorse"
+              className="w-full h-full rounded-xl object-contain"
+              animate={{ y: [0, -5, 0] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.div>
           <h1 className="font-display text-[2.5rem] font-bold tracking-tight mb-2 text-slate-800">Starhorse</h1>
           <p className="text-[#8895A7] text-[10px] sm:text-xs font-bold tracking-[0.2em] uppercase">
             Maritime Transportation & Logistics

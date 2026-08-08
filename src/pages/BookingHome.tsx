@@ -43,7 +43,7 @@ const BookingHome = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0E151E] flex flex-col text-white font-body overflow-x-hidden">
+    <div className="min-h-screen bg-[#0E151E] flex flex-col text-white font-body overflow-x-hidden pb-nav">
       <PassengerHeader />
 
       {/* ── Top Header Section with Background Image ── */}

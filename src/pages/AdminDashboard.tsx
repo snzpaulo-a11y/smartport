@@ -780,7 +780,7 @@ const AdminDashboard = () => {
                               </div>
                               <div className="flex gap-0.5">
                                 {[1, 2, 3, 4, 5].map((star) => (
-                                  <Star key={star} className={`w-3 h-3 ${star <= r.rating ? "fill-amber-500 text-amber-500" : "text-muted/20"}`} />
+                                  <Star key={star} className={`w-3 h-3 ${star <= r.rating ? "fill-amber-500 text-amber-500" : "text-slate-400"}`} />
                                 ))}
                               </div>
                             </div>

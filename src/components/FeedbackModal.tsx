@@ -78,7 +78,7 @@ export default function FeedbackModal({ isOpen, onClose, onSubmit, passengerName
                           className={`w-10 h-10 ${
                             r <= (hoverRating || rating)
                               ? "fill-amber-400 text-amber-400"
-                              : "text-white/10 hover:text-white/20"
+                              : "fill-black/10 text-black hover:fill-black/20"
                           } transition-colors`}
                         />
                       </button>
