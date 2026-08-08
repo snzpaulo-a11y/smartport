@@ -1,0 +1,27 @@
+{
+  "ships": [
+    {
+      "id": "1775586555144-i1ozzglvd",
+      "name": "Starhorse",
+      "requester_id": "c0381ad1-c433-4a79-a512-3c55fc80a99f",
+      "type": "ferry"
+    }
+  ],
+  "staff": [
+    {
+      "id": "27cc7d53-1732-403b-b8ef-3ff700b9f72c",
+      "email": "superadmin@smartport.com",
+      "name": "System Super Admin",
+      "ship_id": null,
+      "role": "super_admin"
+    },
+    {
+      "id": "c0381ad1-c433-4a79-a512-3c55fc80a99f",
+      "email": "starhorse@gmail.com",
+      "name": "StarHorse",
+      "ship_id": "1775586555144-i1ozzglvd",
+      "role": "admin"
+    }
+  ],
+  "analysis": {}
+}

@@ -1,0 +1,63 @@
+import { ReactNode, useEffect, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { Staff, StaffRole } from "@/lib/store";
+import { Loader2 } from "lucide-react";
+
+interface AuthGuardProps {
+  children: ReactNode;
+  allowedRoles?: StaffRole[];
+  requireStaff?: boolean;
+}
+
+export const AuthGuard = ({ children, allowedRoles, requireStaff = true }: AuthGuardProps) => {
+  const [loading, setLoading] = useState(true);
+  const [authenticatedStaff, setAuthenticatedStaff] = useState<Staff | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check for staff auth in session
+    // We check both "adminStaff" and "scanStaff" for flexibility
+    const adminStaff = sessionStorage.getItem("adminStaff");
+    const scanStaff = sessionStorage.getItem("scanStaff");
+    
+    if (adminStaff) {
+      setAuthenticatedStaff(JSON.parse(adminStaff));
+    } else if (scanStaff) {
+      setAuthenticatedStaff(JSON.parse(scanStaff));
+    }
+    
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // If staff is required but not found
+  if (requireStaff && !authenticatedStaff) {
+    // If it's a scanner route, go to scan-login
+    if (location.pathname.startsWith("/scanner") || location.pathname.startsWith("/scan-history")) {
+      return <Navigate to="/scan-login" replace />;
+    }
+    // Default to admin login for other staff routes
+    return <Navigate to="/admin-login" replace />;
+  }
+
+  // If role check is required
+  if (authenticatedStaff && allowedRoles && !allowedRoles.includes(authenticatedStaff.role)) {
+    // Unauthorized - redirect to a safe page (e.g., home or own dashboard)
+    if (authenticatedStaff.role === "scanner") {
+       return <Navigate to="/scanner" replace />;
+    }
+    if (authenticatedStaff.role === "admin" || authenticatedStaff.role === "super_admin") {
+       return <Navigate to="/admin" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};

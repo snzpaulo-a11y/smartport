@@ -1,0 +1,284 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+/** @tailwind base; */
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+
+    --primary: 352 98% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 30%;
+
+    --accent: 352 98% 96%;
+    --accent-foreground: 352 98% 48%;
+
+    --destructive: 352 98% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 97%;
+    --ring: 352 98% 48%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 352 98% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 352 98% 48%;
+
+    /* Custom premium light theme tokens based on selected palette */
+    --ocean-gradient: none;
+    --ocean-glow: none;
+    --glass-bg: hsl(0 0% 100%);
+    --glass-border: hsl(0 0% 90%);
+    --glass-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+
+    /* Status colors */
+    --status-green: 142 76% 36%;
+    --status-yellow: 45 93% 47%;
+    --status-red: 0 84% 60%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--ocean-gradient);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(16px);
+  }
+
+  .ocean-glow {
+    box-shadow: var(--ocean-glow);
+  }
+
+  .text-gradient-ocean {
+    background: linear-gradient(135deg, hsl(356 100% 60%), hsl(356 100% 48%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .btn-ocean {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-weight: 600;
+    border-radius: 1rem;
+    padding: 0.75rem 1.5rem;
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 24px hsl(356 100% 48% / 0.4);
+  }
+
+  .btn-ocean:hover {
+    box-shadow: 0 8px 32px hsl(356 100% 48% / 0.6);
+    transform: translateY(-2px);
+  }
+
+  .btn-coral {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+    font-weight: 600;
+    border-radius: 1rem;
+    padding: 0.75rem 1.5rem;
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 24px hsl(193 40% 15% / 0.4);
+  }
+
+  .btn-coral:hover {
+    box-shadow: 0 8px 32px hsl(193 40% 15% / 0.6);
+    transform: translateY(-2px);
+  }
+
+  .seat-available {
+    background-color: hsla(var(--primary) / 0.1);
+    border-color: hsla(var(--primary) / 0.3);
+    color: hsl(var(--primary));
+    cursor: pointer;
+    transition: background-color 200ms;
+  }
+
+  .seat-available:hover {
+    background-color: hsla(var(--primary) / 0.2);
+  }
+
+  .seat-selected {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+    cursor: pointer;
+    box-shadow: 0 0 16px hsl(356 100% 48% / 0.5);
+  }
+
+  .seat-booked {
+    background-color: hsla(var(--muted) / 0.5);
+    border-color: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .seat-blocked {
+    background-color: hsla(var(--destructive) / 0.1);
+    border-color: hsla(var(--destructive) / 0.3);
+    color: hsl(var(--destructive));
+    cursor: not-allowed;
+  }
+
+  .status-green {
+    background-color: hsl(142, 76%, 36%);
+    color: white;
+  }
+
+  .status-yellow {
+    background-color: hsl(45, 93%, 47%);
+    color: black;
+  }
+
+  .status-red {
+    background-color: hsl(0, 84%, 60%);
+    color: white;
+  }
+}
+
+/* Red & White Light Theme Overrides */
+body, .min-h-screen {
+  background-color: hsl(var(--background)) !important;
+  background-image: var(--ocean-gradient) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Override hardcoded dark theme backgrounds in HTML/TSX templates */
+.bg-\[\#E3000F\] {
+  background-color: hsl(var(--primary)) !important;
+}
+.bg-\[\#FF3B47\] {
+  background-color: hsl(var(--primary) / 0.9) !important;
+}
+.bg-\[\#0A1118\], .bg-\[\#0a1118\], .bg-\[\#0E151E\], .bg-\[\#0e151e\], .bg-\[\#0F1219\], .bg-\[\#0f1219\], .bg-\[\#0F172A\], .bg-\[\#0f172a\] {
+  background-color: hsl(var(--background)) !important;
+  background-image: none !important;
+}
+.bg-\[\#131B24\], .bg-\[\#131b24\], .bg-\[\#151A22\], .bg-\[\#151a22\], .glass-card {
+  background-color: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+.bg-\[\#1A222C\], .bg-\[\#1a222c\] {
+  background-color: hsl(var(--input)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+button.bg-\[\#1A222C\], button.bg-\[\#1a222c\], button.bg-\[\#1B2735\], button.bg-\[\#1b2735\], button.bg-\[\#222E3A\], button.bg-\[\#222e3a\] {
+  background-color: #ffffff !important;
+  color: hsl(var(--primary)) !important;
+  border: 2px solid hsl(var(--primary)) !important;
+}
+button.bg-\[\#1A222C\]:hover, button.bg-\[\#1a222c\]:hover, button.bg-\[\#222E3A\]:hover {
+  background-color: hsl(var(--primary) / 0.05) !important;
+}
+.bg-\[\#1B2735\], .bg-\[\#1b2735\], .bg-\[\#351B1D\] {
+  background-color: hsl(var(--secondary)) !important;
+}
+.bg-\[\#112535\], .bg-\[\#2E0E11\] {
+  background-color: hsl(var(--primary) / 0.08) !important;
+  border-color: hsl(var(--primary) / 0.15) !important;
+}
+
+/* Typography / Text Colors Overrides */
+h1, h2, h3, h4, h5, h6, p, span, label, div {
+  &.text-white:not(button):not(button *):not(a):not(a *):not(.btn-ocean):not(.seat-selected):not(.badge):not(.status-green):not(.status-red) {
+    color: hsl(var(--foreground)) !important;
+  }
+  &.text-white\/80:not(button):not(button *):not(a):not(a *):not(.btn-ocean):not(.seat-selected):not(.badge) {
+    color: hsl(var(--foreground) / 0.8) !important;
+  }
+  &.text-white\/60:not(button):not(button *):not(a):not(a *):not(.btn-ocean):not(.seat-selected):not(.badge) {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+  &.text-white\/40:not(button):not(button *):not(a):not(a *):not(.btn-ocean):not(.seat-selected):not(.badge) {
+    color: hsl(var(--muted-foreground) / 0.7) !important;
+  }
+  &.text-white\/20:not(button):not(button *):not(a):not(a *):not(.btn-ocean):not(.seat-selected):not(.badge) {
+    color: hsl(var(--muted-foreground) / 0.5) !important;
+  }
+  &.text-\[\#8895A7\] {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+}
+
+/* Secondary Highlight Color Override */
+.text-secondary {
+  color: hsl(var(--primary)) !important;
+}
+
+/* SVG / Icon overrides */
+.text-white\/20 {
+  color: hsl(var(--muted-foreground) / 0.4) !important;
+}
+
+/* Enforce readable black/dark text on all input, select, and textarea fields */
+input:not(.otp-hidden-input), select, textarea, option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+input::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Button overrides to ensure text remains readable white on Red backgrounds */
+button.bg-\[\#E3000F\], button.bg-primary, .btn-ocean, button.btn-ocean {
+  color: hsl(var(--primary-foreground)) !important;
+}
+button.bg-\[\#FF3B47\]:hover {
+  background-color: hsl(var(--primary) / 0.9) !important;
+}
+
+/* Default button text color for buttons without explicit primary backgrounds */
+button:not(.bg-\[\#E3000F\]):not(.bg-primary):not(.btn-ocean):not(.seat-selected):not(:disabled) {
+  color: #000000 !important;
+}
+
+/* Clear readable styling for disabled buttons / departed states */
+button:disabled, .cursor-not-allowed {
+  background-color: #f3f4f6 !important;
+  color: #9ca3af !important;
+  border-color: #e5e7eb !important;
+  opacity: 0.85 !important;
+  cursor: not-allowed !important;
+}
