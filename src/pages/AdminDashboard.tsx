@@ -615,7 +615,7 @@ const AdminDashboard = () => {
                          className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
                      </div>
                      <div className="flex flex-wrap gap-2 text-[9px] font-black uppercase tracking-widest">
-                       <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">Available</span>
+                       <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">Available</span>
                        <span className="px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-500">Booked</span>
                        <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500">Reserved</span>
                        <span className="px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">Blocked</span>
@@ -637,7 +637,7 @@ const AdminDashboard = () => {
                       
                       const Seat = (s: any) => (
                         <button key={s.id} onClick={() => s.status !== "booked" && s.status !== "reserved" && supabase.from("seats").update({ status: s.status === "blocked" ? "available" : "blocked" }).eq("id", s.id).then(() => loadShipData())} 
-                          className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500" : s.status === "reserved" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-primary/10 border-primary/20 text-primary hover:scale-105"}`}>
+                          className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500" : s.status === "reserved" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:scale-105"}`}>
                           {s.status === "booked" ? <Users className="w-3 h-3 mb-1" /> : s.status === "reserved" ? <Wallet className="w-3 h-3 mb-1" /> : s.status === "blocked" ? <Lock className="w-3 h-3 mb-1" /> : <Armchair className="w-3 h-3 mb-1" />}
                           {s.label}
                         </button>
