@@ -258,8 +258,11 @@ const AdminDashboard = () => {
       setHistoryBookings((hData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date })));
 
       const { data: sData } = await supabase.from("seats").select("*").eq("ship_id", selectedShipId).order("label");
-      const bookedIds = new Set((tData || []).map((b: any) => b.seat_id));
-      setSeats((sData || []).map((s: any) => ({ ...s, status: s.status === "blocked" ? "blocked" : bookedIds.has(s.id) ? "booked" : "available" })));
+      setSeats((sData || []).map((s: any) => {
+        const booking = (tData || []).find((b: any) => b.seat_id === s.id);
+        const status = s.status === "blocked" ? "blocked" : booking ? (booking.status === "counter" ? "reserved" : "booked") : "available";
+        return { ...s, status, bookingStatus: booking?.status || null };
+      }));
 
       const shipReviews = await getReviewsByShip(selectedShipId);
       setReviews(shipReviews);
@@ -600,15 +603,23 @@ const AdminDashboard = () => {
 
               {activeTab === "seats" && (
                 <div className="space-y-10">
-                   <div className="glass-card rounded-[2rem] p-5 border-border/50 flex items-center justify-between gap-4">
-                     <div>
-                       <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Seat Availability</p>
-                       <p className="text-sm font-bold text-foreground">
-                         {new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
-                       </p>
+                   <div className="glass-card rounded-[2rem] p-5 border-border/50">
+                     <div className="flex items-center justify-between gap-4 mb-4">
+                       <div>
+                         <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Seat Availability</p>
+                         <p className="text-sm font-bold text-foreground">
+                           {new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
+                         </p>
+                       </div>
+                       <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)}
+                         className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
                      </div>
-                     <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)}
-                       className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
+                     <div className="flex flex-wrap gap-2 text-[9px] font-black uppercase tracking-widest">
+                       <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">Available</span>
+                       <span className="px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-500">Booked</span>
+                       <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500">Reserved</span>
+                       <span className="px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">Blocked</span>
+                     </div>
                    </div>
                    {(() => {
                       const regular = seats.filter(s => s.type === "seat");
@@ -625,9 +636,9 @@ const AdminDashboard = () => {
                       const lw = seats.filter(s => s.type === "bunk-lower").sort(sortBerths);
                       
                       const Seat = (s: any) => (
-                        <button key={s.id} onClick={() => s.status !== "booked" && supabase.from("seats").update({ status: s.status === "blocked" ? "available" : "blocked" }).eq("id", s.id).then(() => loadShipData())} 
-                          className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500/40" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-primary/10 border-primary/20 text-primary hover:scale-105"}`}>
-                          {s.status === "booked" ? <Users className="w-3 h-3 mb-1" /> : s.status === "blocked" ? <Lock className="w-3 h-3 mb-1" /> : <Armchair className="w-3 h-3 mb-1" />}
+                        <button key={s.id} onClick={() => s.status !== "booked" && s.status !== "reserved" && supabase.from("seats").update({ status: s.status === "blocked" ? "available" : "blocked" }).eq("id", s.id).then(() => loadShipData())} 
+                          className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500" : s.status === "reserved" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-primary/10 border-primary/20 text-primary hover:scale-105"}`}>
+                          {s.status === "booked" ? <Users className="w-3 h-3 mb-1" /> : s.status === "reserved" ? <Wallet className="w-3 h-3 mb-1" /> : s.status === "blocked" ? <Lock className="w-3 h-3 mb-1" /> : <Armchair className="w-3 h-3 mb-1" />}
                           {s.label}
                         </button>
                       );
