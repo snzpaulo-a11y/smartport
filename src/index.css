@@ -299,8 +299,15 @@ button:disabled, .cursor-not-allowed {
   }
 }
 
-/* Prevent horizontal shake when the layout is a hair wider than the viewport */
-html, body, #root {
+/* Prevent horizontal shake when the layout is a hair wider than the viewport.
+   NOTE: `html` must use `overflow-x: clip` (NOT `hidden`) — on iOS Safari,
+   `overflow-x: hidden` on <html> disables vertical scrolling. */
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+body, #root {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
