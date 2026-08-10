@@ -321,7 +321,7 @@ const SeatSelection = () => {
                   <div key={idx} className="bg-[#131B24] rounded-2xl p-6 border border-white/5 space-y-4 shadow-xl">
                     <div className="flex justify-between items-center border-b border-white/5 pb-3">
                       <h3 className="text-[#E3000F] font-bold text-xs tracking-wider uppercase">
-                        Passenger {idx + 1}: {p.type === "pwd" ? "PWD / Senior" : p.type === "student" ? "Student" : "Adult (Regular)"}
+                        Passenger {idx + 1}: {p.type === "pwd" ? "PWD" : p.type === "senior" ? "Senior Citizen" : p.type === "student" ? "Student" : "Adult (Regular)"}
                       </h3>
                       <span className="px-2.5 py-0.5 rounded bg-white/5 border border-white/10 text-white font-bold text-[10px]">
                         Seat {p.seatLabel}
@@ -406,7 +406,7 @@ const SeatSelection = () => {
                               className="w-full py-3 bg-[#E3000F]/10 border border-dashed border-[#E3000F]/30 hover:border-[#E3000F] rounded-xl flex items-center justify-center gap-2 text-[#E3000F] hover:bg-[#E3000F]/15 transition-all text-xs font-bold"
                             >
                               <Camera className="w-4 h-4" />
-                              Upload {p.type === "student" ? "Student" : "PWD/Senior"} ID
+                              Upload {p.type === "student" ? "Student" : p.type === "senior" ? "Senior" : "PWD"} ID
                             </button>
                           )}
                         </div>
@@ -536,7 +536,8 @@ const SeatSelection = () => {
                     {[
                       { id: "Regular", label: "Regular", discount: 0 },
                       { id: "Student", label: "Student", discount: 0.2 },
-                      { id: "Senior", label: "Senior/PWD", discount: 0.32 },
+                      { id: "Senior", label: "Senior", discount: 0.32 },
+                      { id: "PWD", label: "PWD", discount: 0.32 },
                     ].map(pt => (
                       <button key={pt.id} onClick={() => {
                         if (pt.id === "Regular") {
@@ -586,7 +587,7 @@ const SeatSelection = () => {
                         <div>
                           <h4 className="text-white text-sm font-bold mb-1">ID Verification Required</h4>
                           <p className="text-white/50 text-xs leading-relaxed">
-                            To claim the <span className="text-white font-bold">{passType === "Student" ? "Student" : "Senior/PWD"} discount</span>, you must provide a clear photo of your valid ID. Tap a discount type above to begin.
+                            To claim the <span className="text-white font-bold">{passType === "Student" ? "Student" : passType === "PWD" ? "PWD" : "Senior"} discount</span>, you must provide a clear photo of your valid ID. Tap a discount type above to begin.
                           </p>
                         </div>
                       </div>

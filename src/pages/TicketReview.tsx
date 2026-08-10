@@ -159,7 +159,7 @@ const TicketReview = () => {
                     <div className="space-y-1">
                       <p className="text-slate-800 font-bold text-sm">{p.name}</p>
                       <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-                        {p.type === "pwd" ? "PWD / Senior" : p.type === "student" ? "Student" : "Adult"} · Seat {p.seatLabel}
+                        {p.type === "pwd" ? "PWD" : p.type === "senior" ? "Senior Citizen" : p.type === "student" ? "Student" : "Adult"} · Seat {p.seatLabel}
                       </p>
                     </div>
                     <div className="text-right">

@@ -225,7 +225,7 @@ const AdminDashboard = () => {
 
   const typeColor: Record<string, string> = {
     regular: "bg-primary text-primary-foreground", student: "bg-secondary text-secondary-foreground",
-    senior: "bg-amber-500 text-white", pwd: "bg-amber-500 text-white",
+    senior: "bg-amber-500 text-white", pwd: "bg-violet-500 text-white",
   };
 
   const loadShips = useCallback(async () => {

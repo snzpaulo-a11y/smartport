@@ -31,6 +31,7 @@ const LegSelector = () => {
   
   // Group passenger counters
   const [pwdCount, setPwdCount] = useState(0);
+  const [seniorCount, setSeniorCount] = useState(0);
   const [adultCount, setAdultCount] = useState(1);
   const [studentCount, setStudentCount] = useState(0);
 
@@ -113,7 +114,7 @@ const LegSelector = () => {
       }
     }
 
-    const totalPassengers = pwdCount + adultCount + studentCount;
+    const totalPassengers = pwdCount + seniorCount + adultCount + studentCount;
     if (totalPassengers === 0) {
       alert("Please select at least 1 passenger ticket.");
       return;
@@ -121,6 +122,7 @@ const LegSelector = () => {
 
     const passengerGroups: string[] = [];
     for (let i = 0; i < pwdCount; i++) passengerGroups.push("pwd");
+    for (let i = 0; i < seniorCount; i++) passengerGroups.push("senior");
     for (let i = 0; i < adultCount; i++) passengerGroups.push("regular");
     for (let i = 0; i < studentCount; i++) passengerGroups.push("student");
 
@@ -133,6 +135,7 @@ const LegSelector = () => {
         legPrice: finalPrice, 
         bookingType: type,
         pwdCount,
+        seniorCount,
         adultCount,
         studentCount,
         totalPassengers,
@@ -288,7 +291,7 @@ const LegSelector = () => {
         
         {/* Pwd Counter */}
         <div className="flex items-center justify-between bg-[#351B1D] p-3.5 rounded-xl border border-white/5">
-          <span className="font-bold text-sm text-white">PWD / Senior Citizen</span>
+          <span className="font-bold text-sm text-white">PWD</span>
           <div className="flex items-center gap-4">
             <button 
               type="button" 
@@ -301,6 +304,28 @@ const LegSelector = () => {
             <button 
               type="button" 
               onClick={() => setPwdCount(pwdCount + 1)}
+              className="w-8 h-8 rounded-lg bg-[#E3000F]/20 border border-[#E3000F]/40 flex items-center justify-center font-bold text-[#E3000F] hover:bg-[#E3000F]/30 transition-colors"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* Senior Citizen Counter */}
+        <div className="flex items-center justify-between bg-[#351B1D] p-3.5 rounded-xl border border-white/5">
+          <span className="font-bold text-sm text-white">Senior Citizen</span>
+          <div className="flex items-center gap-4">
+            <button 
+              type="button" 
+              onClick={() => setSeniorCount(Math.max(0, seniorCount - 1))}
+              className="w-8 h-8 rounded-lg bg-[#222E3A] border border-white/10 flex items-center justify-center font-bold text-white hover:bg-white/10 transition-colors"
+            >
+              -
+            </button>
+            <span className="font-bold text-base text-white w-4 text-center">{seniorCount}</span>
+            <button 
+              type="button" 
+              onClick={() => setSeniorCount(seniorCount + 1)}
               className="w-8 h-8 rounded-lg bg-[#E3000F]/20 border border-[#E3000F]/40 flex items-center justify-center font-bold text-[#E3000F] hover:bg-[#E3000F]/30 transition-colors"
             >
               +

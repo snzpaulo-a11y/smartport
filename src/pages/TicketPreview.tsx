@@ -8,7 +8,7 @@ import IdentityCenter from "@/components/IdentityCenter";
 const PASSENGER_TYPES = [
   { value: "regular", label: "Regular",     color: "bg-primary/20 text-primary",     discount: 0,    penalty: 0 },
   { value: "student", label: "Student",     color: "bg-secondary/20 text-secondary", discount: 0.20, penalty: 0.20 },
-  { value: "senior",  label: "Senior/PWD",  color: "bg-amber-500/20 text-amber-500", discount: 0.32, penalty: 0.32 },
+  { value: "senior",  label: "Senior Citizen",  color: "bg-amber-500/20 text-amber-500", discount: 0.32, penalty: 0.32 },
   { value: "pwd",     label: "PWD",         color: "bg-amber-500/20 text-amber-500", discount: 0.32, penalty: 0.32 },
 ] as const;
 

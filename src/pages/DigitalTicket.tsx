@@ -47,7 +47,7 @@ const TYPE_COLOR: Record<string, string> = {
   regular: "bg-primary/20 text-primary",
   student: "bg-secondary/20 text-secondary",
   senior: "bg-amber-500/20 text-amber-500",
-  pwd: "bg-amber-500/20 text-amber-500",
+  pwd: "bg-violet-500/20 text-violet-500",
 };
 
 const DigitalTicket = () => {
