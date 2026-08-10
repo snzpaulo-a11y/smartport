@@ -17,9 +17,12 @@ const STATUS_STYLE: Record<string, string> = {
 const formatTimeLeft = (deadline: Date) => {
   const diff = deadline.getTime() - Date.now();
   if (diff <= 0) return "Expired";
-  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
-  return hours > 0 ? `${hours}h ${minutes}m left` : `${minutes}m left`;
+  if (days > 0) return `${days}d ${hours}h ${minutes}m left`;
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${minutes}m left`;
 };
 
 const getPriceForTicket = (ticket: Booking) => {

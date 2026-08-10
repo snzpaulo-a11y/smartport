@@ -433,26 +433,22 @@ const PaymentPage = () => {
         </div>
 
         <div className="space-y-3">
-          <motion.button 
-            whileHover={!loading && !isLocked ? { scale: 1.02 } : {}} 
-            whileTap={!loading && !isLocked ? { scale: 0.98 } : {}}
-            disabled={loading || isLocked} 
+          <motion.button
+            disabled
             onClick={() => handlePay("gcash")}
-            className={`w-full py-4 rounded-2xl font-display font-bold text-lg flex items-center justify-center gap-3 bg-[#007DFE] hover:bg-[#007DFE]/90 text-white transition-all ${(loading || isLocked) ? "opacity-40 cursor-not-allowed grayscale" : ""}`}
+            className="w-full py-4 rounded-2xl font-display font-bold text-lg flex items-center justify-center gap-3 bg-muted text-muted-foreground/50 border border-border/50 cursor-not-allowed"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-2xl">💙</span>}
-            Pay via GCash
+            <span className="text-2xl opacity-40">💙</span>
+            GCash — Coming Soon
           </motion.button>
-          
-          <motion.button 
-            whileHover={!loading && !isLocked ? { scale: 1.02 } : {}} 
-            whileTap={!loading && !isLocked ? { scale: 0.98 } : {}}
-            disabled={loading || isLocked} 
+
+          <motion.button
+            disabled
             onClick={() => handlePay("paymaya")}
-            className={`w-full py-4 rounded-2xl font-display font-bold text-lg flex items-center justify-center gap-3 bg-[#59B512] hover:bg-[#59B512]/90 text-white transition-all ${(loading || isLocked) ? "opacity-40 cursor-not-allowed grayscale" : ""}`}
+            className="w-full py-4 rounded-2xl font-display font-bold text-lg flex items-center justify-center gap-3 bg-muted text-muted-foreground/50 border border-border/50 cursor-not-allowed"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-2xl">💚</span>}
-            Pay via Maya
+            <span className="text-2xl opacity-40">💚</span>
+            Maya — Coming Soon
           </motion.button>
 
           <motion.button 
@@ -470,6 +466,10 @@ const PaymentPage = () => {
         <p className="text-[10px] text-muted-foreground text-center mt-3 uppercase tracking-tighter font-bold">
           Pay at the Counter — reserve your seat now, pay cash at the terminal counter.
         </p>
+
+        <div className="mt-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-500/90 text-center">
+          Online payment (GCash / Maya) is coming soon. For now, reservations are paid at the terminal counter.
+        </div>
 
         {currentStatus === "pending" && (
           <div className="mt-6 pt-6 border-t border-white/5">
@@ -492,7 +492,7 @@ const PaymentPage = () => {
         )}
 
         <p className="text-xs text-muted-foreground text-center mt-4">
-          🔒 Secured by PayMongo · You will be redirected to complete payment
+          🛡️ Online payments coming soon — reserve now, pay at the terminal counter.
         </p>
       </motion.div>
     </div>
