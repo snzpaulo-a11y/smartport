@@ -1200,16 +1200,14 @@ export async function markBookingsCounter(ids: string[], deadline: Date): Promis
 }
 
 export async function deleteBooking(id: string): Promise<void> {
-  // If Hard Delete is blocked by RLS and Soft Delete is blocked by Check Constraints,
-  // we perform a "User-Level Soft Delete" by removing the userId association.
-  // This makes the booking disappear from the user's "My Tickets" list immediately.
-  const { error } = await supabase.from("bookings").update({ user_id: null }).eq("id", id);
-  
+  // Soft delete: detach from the user AND mark as cancelled so the seat is
+  // freed and the booking disappears from the admin reservations list.
+  // (Hard Delete is blocked by RLS, so we never physically remove the row.)
+  const { error } = await supabase.from("bookings").update({ user_id: null, status: "cancelled" }).eq("id", id);
+
   if (error) {
-    console.error("[deleteBooking] User-Level Soft Delete Error:", error);
-    // If even updating user_id is blocked, we try one last thing: 
-    // maybe we can at least mark it as "cancelled" if the constraint was a fluke?
-    // But since that failed before, we'll just throw the error here.
+    console.error("[deleteBooking] Soft Delete Error:", error);
+    // If even updating user_id is blocked, we throw the error.
     throw error;
   }
 }

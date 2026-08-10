@@ -7,7 +7,7 @@ import {
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
   CheckCircle, AlertTriangle, History, UserCog, ChevronDown, ChevronRight,
   Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw, Printer, HandCoins,
-  ScanLine, Keyboard, Camera, CameraOff, Wallet
+  ScanLine, Keyboard, Camera, CameraOff, Wallet, Search
 } from "lucide-react";
 import { supabase } from "@/lib/store";
 import { Html5Qrcode } from "html5-qrcode";
@@ -74,6 +74,25 @@ const BookingRow = ({ b, typeColor, onCollect, onPrint }: { b: any; typeColor: R
   </div>
 );
 
+const ReservationRow = ({ b, onSelect }: { b: any; onSelect: (id: string) => void }) => (
+  <button onClick={() => onSelect(b.id)} className="glass-card rounded-xl p-4 flex items-center justify-between gap-3 border-border/50 hover:bg-muted/30 transition-colors text-left w-full">
+    <div className="flex items-center gap-4 min-w-0">
+      <div className="w-2 h-10 rounded-full bg-amber-500/40" />
+      <div className="min-w-0">
+        <p className="font-bold text-foreground text-sm tracking-tight">{b.passengerName || b.passenger_name}</p>
+        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Seat {b.seatLabel || b.seat_label} · {b.phone}</p>
+        <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-tighter font-mono">{b.qr_code}</p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2 shrink-0">
+      <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-400 border border-amber-500/30">
+        For Pickup / Unpaid
+      </span>
+      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+    </div>
+  </button>
+);
+
 const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void }) => {
   const [showDetails, setShowDetails] = useState(false);
   return (
@@ -117,7 +136,7 @@ const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void })
 };
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
-type Tab = "manifest" | "scan" | "seats" | "history" | "staff" | "vessel" | "reviews" | "verification";
+type Tab = "manifest" | "reservations" | "scan" | "seats" | "history" | "staff" | "vessel" | "reviews" | "verification";
 function getLocalDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 const today = getLocalDate();
 
@@ -167,6 +186,8 @@ const AdminDashboard = () => {
   const [selectedManifestDate, setSelectedManifestDate] = useState<string>(today);
   const [loading, setLoading]                 = useState(false);
   const [verificationBookings, setVerificationBookings] = useState<any[]>([]);
+  const [reservations, setReservations]                 = useState<any[]>([]);
+  const [reservationSearch, setReservationSearch]       = useState("");
   const [expandedYears, setExpandedYears]     = useState<string[]>([today.split("-")[0]]);
   const [expandedMonths, setExpandedMonths]   = useState<string[]>([]);
 
@@ -229,7 +250,9 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       const { data: tData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).eq("trip_date", selectedManifestDate).in("status", ["paid", "boarded", "counter"]);
-      setTodayBookings((tData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date, boardStop: r.board_stop, alightStop: r.alight_stop })));
+      const tripBookings = (tData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date, boardStop: r.board_stop, alightStop: r.alight_stop }));
+      setTodayBookings(tripBookings.filter(b => b.status !== "counter"));
+      setReservations(tripBookings.filter(b => b.status === "counter").sort((a, b) => (a.created_at || "").localeCompare(b.created_at || "")));
 
       const { data: hData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).lt("trip_date", today).in("status", ["paid", "boarded"]);
       setHistoryBookings((hData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date })));
@@ -258,6 +281,19 @@ const AdminDashboard = () => {
 
   useEffect(() => { loadShips(); }, [loadShips]);
   useEffect(() => { loadShipData(); }, [loadShipData]);
+
+  // Real-time: keep reservations + manifest in sync when a passenger books,
+  // pays, or cancels (auto-remove cancelled reservations).
+  useEffect(() => {
+    if (!selectedShipId) return;
+    const channel = supabase
+      .channel(`admin-bookings-${selectedShipId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings', filter: `ship_id=eq.${selectedShipId}` }, () => loadShipData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `ship_id=eq.${selectedShipId}` }, () => loadShipData())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'bookings', filter: `ship_id=eq.${selectedShipId}` }, () => loadShipData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedShipId, selectedManifestDate, loadShipData]);
   
   useEffect(() => {
     getStaffList(adminType).then(setStaffList);
@@ -474,6 +510,13 @@ const AdminDashboard = () => {
   useEffect(() => { if (activeTab !== "scan") stopScanCamera(); }, [activeTab]);
 
   const currentShip = ships.find(s => s.id === selectedShipId);
+  const filteredReservations = reservations.filter(b => {
+    const q = reservationSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (b.passengerName || "").toLowerCase().includes(q)
+      || (b.qr_code || "").toLowerCase().includes(q)
+      || (b.id || "").toLowerCase().includes(q);
+  });
   const downloadCSV = (bookings: any[], label: string) => {
     const csv = [["Name","Type","Seat","Phone"], ...bookings.map(b => [b.passengerName, b.passengerType, b.seatLabel, b.phone])].map(r => r.join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `${label}.csv`; a.click();
@@ -481,6 +524,7 @@ const AdminDashboard = () => {
 
   const TABS: { id: Tab; label: string; icon: any }[] = [
     { id: "manifest", label: "Manifest", icon: FileText },
+    { id: "reservations", label: "Reservations", icon: Wallet },
     { id: "scan",     label: "Scan & Confirm", icon: ScanLine },
     { id: "seats",    label: "Seats",    icon: Armchair },
     { id: "history",  label: "History",  icon: History },
@@ -556,6 +600,16 @@ const AdminDashboard = () => {
 
               {activeTab === "seats" && (
                 <div className="space-y-10">
+                   <div className="glass-card rounded-[2rem] p-5 border-border/50 flex items-center justify-between gap-4">
+                     <div>
+                       <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Seat Availability</p>
+                       <p className="text-sm font-bold text-foreground">
+                         {new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
+                       </p>
+                     </div>
+                     <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)}
+                       className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
+                   </div>
                    {(() => {
                       const regular = seats.filter(s => s.type === "seat");
                       
@@ -961,6 +1015,45 @@ const AdminDashboard = () => {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {activeTab === "reservations" && (
+                <div className="space-y-4">
+                  <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-lg font-black text-foreground tracking-tight">Counter Reservations</h2>
+                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">Unpaid reservations for {selectedManifestDate} — collect payment to confirm</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="px-4 py-1.5 glass-card rounded-full text-[10px] font-black text-primary border-primary/20 uppercase tracking-widest">
+                          {reservations.length} Pending
+                        </div>
+                        <button onClick={loadShipData} className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary" title="Refresh">
+                          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-muted-foreground/50 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <input value={reservationSearch} onChange={e => setReservationSearch(e.target.value)} placeholder="Search by passenger name or code (SPT-...)"
+                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                    </div>
+                  </div>
+
+                  {filteredReservations.length === 0 ? (
+                    <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">
+                      {reservations.length === 0 ? "No Reservations" : "No match found"}
+                    </div>
+                  ) : (
+                    <div className="grid gap-3">
+                      {filteredReservations.map(b => (
+                        <ReservationRow key={b.id} b={b} onSelect={() => setScanBooking(b)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
