@@ -6,7 +6,7 @@ import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
   CheckCircle, AlertTriangle, History, UserCog, ChevronDown, ChevronRight,
-  Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw
+  Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw, Printer, HandCoins
 } from "lucide-react";
 import { supabase } from "@/lib/store";
 
@@ -26,9 +26,9 @@ const InputField = ({ label, value, onChange, placeholder, type = "text", requir
   </div>
 );
 
-const BookingRow = ({ b, typeColor }: { b: any; typeColor: Record<string, string> }) => (
-  <div className="glass-card rounded-xl p-4 flex items-center justify-between border-border/50 hover:bg-muted/30 transition-colors">
-    <div className="flex items-center gap-4">
+const BookingRow = ({ b, typeColor, onCollect, onPrint }: { b: any; typeColor: Record<string, string>; onCollect?: (id: string) => void; onPrint?: (id: string) => void }) => (
+  <div className="glass-card rounded-xl p-4 flex items-center justify-between gap-3 border-border/50 hover:bg-muted/30 transition-colors">
+    <div className="flex items-center gap-4 min-w-0">
       <div className={`w-2 h-10 rounded-full ${typeColor[b.passengerType] || "bg-primary/20"}`} />
       <div>
         <p className="font-bold text-foreground text-sm tracking-tight">{b.passengerName}</p>
@@ -36,14 +36,38 @@ const BookingRow = ({ b, typeColor }: { b: any; typeColor: Record<string, string
         {b.boardStop && b.alightStop && <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-tighter">{b.boardStop} → {b.alightStop}</p>}
       </div>
     </div>
-    <div className="flex items-center gap-2">
-      <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-        b.status === "boarded" 
-          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(52,211,153,0.1)]" 
-          : "bg-primary/10 text-primary border border-primary/20"
-      }`}>
-        {b.status}
-      </span>
+    <div className="flex items-center gap-2 shrink-0">
+      {b.status === "counter" ? (
+        <>
+          <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            For Pickup / Unpaid
+          </span>
+          <button
+            onClick={() => onCollect?.(b.id)}
+            className="px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-500/30 transition-all flex items-center gap-1"
+            title="Collect payment at the counter and mark as paid"
+          >
+            <HandCoins className="w-3.5 h-3.5" /> Collect & Mark Paid
+          </button>
+        </>
+      ) : (
+        <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+          b.status === "boarded"
+            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(52,211,153,0.1)]"
+            : "bg-primary/10 text-primary border border-primary/20"
+        }`}>
+          {b.status}
+        </span>
+      )}
+      {(b.status === "paid" || b.status === "boarded") && (
+        <button
+          onClick={() => onPrint?.(b.id)}
+          className="p-2 rounded-xl bg-muted/40 text-muted-foreground border border-border hover:text-primary transition-all"
+          title="Print paper ticket"
+        >
+          <Printer className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   </div>
 );
@@ -191,7 +215,7 @@ const AdminDashboard = () => {
     if (!selectedShipId) return;
     setLoading(true);
     try {
-      const { data: tData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).eq("trip_date", selectedManifestDate).in("status", ["paid", "boarded"]);
+      const { data: tData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).eq("trip_date", selectedManifestDate).in("status", ["paid", "boarded", "counter"]);
       setTodayBookings((tData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date, boardStop: r.board_stop, alightStop: r.alight_stop })));
 
       const { data: hData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).lt("trip_date", today).in("status", ["paid", "boarded"]);
@@ -319,6 +343,25 @@ const AdminDashboard = () => {
     }
   };
 
+  // ── Counter collection: cash received at the terminal → mark as paid ────────
+  const handleCollectPaid = async (bookingId: string) => {
+    if (!confirm("Confirm payment collected at the counter for this booking?")) return;
+    setLoading(true);
+    try {
+      await supabase.from("bookings").update({ status: "paid" }).eq("id", bookingId);
+      await addSystemLog("COUNTER_COLLECT", `Collected counter payment for booking ${bookingId}`, currentStaff.name);
+      await loadShipData();
+    } catch (err: any) {
+      alert("Failed to mark as paid: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrintTicket = (bookingId: string) => {
+    window.open(`/print-ticket/${bookingId}`, "_blank");
+  };
+
   const currentShip = ships.find(s => s.id === selectedShipId);
   const downloadCSV = (bookings: any[], label: string) => {
     const csv = [["Name","Type","Seat","Phone"], ...bookings.map(b => [b.passengerName, b.passengerType, b.seatLabel, b.phone])].map(r => r.join(",")).join("\n");
@@ -395,7 +438,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   {todayBookings.length === 0 ? <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">No Active Bookings</div>
-                  : <div className="grid gap-3">{todayBookings.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} />)}</div>}
+                  : <div className="grid gap-3">{todayBookings.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} onCollect={handleCollectPaid} onPrint={handlePrintTicket} />)}</div>}
                 </div>
               )}
 
@@ -677,9 +720,9 @@ const AdminDashboard = () => {
                                                      <Download className="w-3.5 h-3.5" />
                                                    </button>
                                                  </div>
-                                                 <div className="p-4 space-y-2">
-                                                   {items.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} />)}
-                                                 </div>
+                                                  <div className="p-4 space-y-2">
+                                                    {items.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} onPrint={handlePrintTicket} />)}
+                                                  </div>
                                                </div>
                                              ))}
                                            </motion.div>

@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUser, getBookingsByUser, getShipById, Booking, deleteBooking, updateBookingToRegular, expireStalePendingBookings, getPaymentDeadline } from "@/lib/store";
-import { ArrowLeft, Ticket, Loader2, Ship as ShipIcon, Calendar, MapPin, QrCode, CreditCard, Trash2, ShieldAlert, CheckCircle2, Shield, Clock } from "lucide-react";
+import { getCurrentUser, getBookingsByUser, getShipById, Booking, deleteBooking, updateBookingToRegular, expireStalePendingBookings, getPaymentDeadline, getCounterDeadline } from "@/lib/store";
+import { ArrowLeft, Ticket, Loader2, Ship as ShipIcon, Calendar, MapPin, QrCode, CreditCard, Trash2, ShieldAlert, CheckCircle2, Shield, Clock, Wallet } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 const STATUS_STYLE: Record<string, string> = {
   paid: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
   boarded: "bg-secondary/10 text-secondary border border-secondary/20",
   pending: "bg-amber-500/10 text-amber-500 border border-amber-500/20",
+  counter: "bg-[#B45309]/10 text-[#F59E0B] border border-[#B45309]/20",
   cancelled: "bg-red-500/10 text-red-500 border border-red-500/20",
   expired: "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20",
 };
@@ -133,8 +134,9 @@ const MyTickets = () => {
         }
 
         const pendingTickets = tickets.filter(t => t.status === 'pending');
+        const counterTickets = tickets.filter(t => t.status === 'counter');
         const expiredTickets = tickets.filter(t => t.status === 'expired');
-        const confirmedTickets = tickets.filter(t => t.status !== 'pending' && t.status !== 'expired');
+        const confirmedTickets = tickets.filter(t => t.status !== 'pending' && t.status !== 'expired' && t.status !== 'counter');
 
         // Group pending tickets by their creation timestamp (createdAt)
         const pendingGroups: Record<string, typeof pendingTickets> = {};
@@ -442,6 +444,85 @@ const MyTickets = () => {
                       );
                     }
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* COUNTER TICKETS SECTION */}
+            {counterTickets.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-[#F59E0B]" />
+                  Reserved at Counter ({counterTickets.length})
+                </h2>
+                <div className="space-y-3">
+                  {counterTickets.map((ticket, i) => (
+                    <motion.div key={ticket.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                      className="glass-card rounded-2xl p-5 border border-[#B45309]/20">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#B45309]/10 flex items-center justify-center shrink-0">
+                            <ShipIcon className="w-5 h-5 text-[#F59E0B]" />
+                          </div>
+                          <div>
+                            <p className="font-display font-bold text-foreground">{ticket.shipName || "Ship"}</p>
+                            <p className="text-[10px] text-muted-foreground">{ticket.shipRoute}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-tight ${STATUS_STYLE[ticket.status] || "bg-muted text-muted-foreground"}`}>
+                            {ticket.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mb-3 text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
+                        <span>Passenger:</span>
+                        <span className="text-foreground font-bold">{ticket.passengerName || "N/A"}</span>
+                      </div>
+
+                      <div className="bg-muted/30 rounded-xl p-3 mb-4 text-xs text-center border border-muted-foreground/10">
+                        <p className="text-[#F59E0B] font-semibold flex items-center justify-center gap-1.5">
+                          <Wallet className="w-3.5 h-3.5" /> Reserved — pay at the counter
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-2 flex items-center justify-center gap-1 font-mono">
+                          <Clock className="w-3 h-3" /> Pay by {getCounterDeadline(ticket).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center gap-1 font-mono">
+                          <Clock className="w-3 h-3" /> {formatTimeLeft(getCounterDeadline(ticket))} to pay
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
+                        <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /><span>{ticket.tripDate ? new Date(ticket.tripDate).toLocaleDateString() : 'N/A'}</span></div>
+                        <div className="flex items-center gap-1.5 justify-end"><Ticket className="w-3.5 h-3.5" /><span>Seat {ticket.seatLabel}</span></div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 border-t border-muted-foreground/10 pt-4">
+                        <button
+                          onClick={() => navigate(`/ticket/${ticket.id}`)}
+                          className="w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all bg-[#B45309] text-white shadow-lg shadow-[#B45309]/20 active:scale-[0.98] hover:scale-[1.01]"
+                        >
+                          <Ticket className="w-4 h-4" /> View Reservation
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm("Cancel this reservation and release the seat?")) {
+                              try {
+                                await deleteBooking(ticket.id);
+                                setTickets(prev => prev.filter(t => t.id !== ticket.id));
+                              } catch (err: any) {
+                                alert("Failed to cancel booking: " + (err.message || "Unknown error"));
+                              }
+                            }
+                          }}
+                          className="py-2.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Cancel Reservation
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
             )}

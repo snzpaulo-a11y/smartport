@@ -66,9 +66,10 @@ export interface Booking {
   passengerName: string;
   passengerType: "regular" | "student" | "senior" | "pwd";
   phone: string;
-  status: "pending" | "paid" | "boarded" | "cancelled" | "expired";
+  status: "pending" | "paid" | "boarded" | "cancelled" | "expired" | "counter";
   qrCode: string;
   createdAt: string;
+  counterDeadline?: string;
   userId?: string;
   accommodationType?: "seat" | "bunk";
   tripDate?: string;
@@ -876,28 +877,83 @@ export function getPaymentDeadline(booking: { createdAt?: string; idVerifiedAt?:
   return new Date(d.getTime() + PAYMENT_WINDOW_HOURS * 60 * 60 * 1000);
 }
 
-export function isBookingExpired(booking: { status?: string; createdAt?: string; idVerifiedAt?: string }): boolean {
-  if (booking.status !== "pending") return false;
-  return getPaymentDeadline(booking).getTime() <= Date.now();
+// ─── Counter (pay-at-counter) hold rules ──────────────────────────────────────
+
+/** Counter reservations release the seat 1 hour before departure. */
+export const COUNTER_HOLD_HOURS_BEFORE_DEPARTURE = 1;
+/** Fallback hold (24h) if departure time can't be parsed. */
+export const COUNTER_FALLBACK_HOLD_HOURS = 24;
+/** Absolute minimum hold so a booking made close to departure never insta-expires. */
+export const COUNTER_MIN_HOLD_MINUTES = 15;
+
+/** Parse a "h:mm AM/PM" string into a Date on the given tripDate. */
+export function parseDepartureTime(departure: string, tripDate: string): Date | null {
+  try {
+    const [time, period] = departure.split(" ");
+    const [hours, minutes] = time.split(":").map(Number);
+    let h = hours;
+    if (period === "PM" && h !== 12) h += 12;
+    if (period === "AM" && h === 12) h = 0;
+    const d = new Date(`${tripDate}T00:00:00`);
+    d.setHours(h, minutes, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Mark pending bookings past their payment window as "expired".
- * Expired bookings no longer block their seat (availability only counts
- * paid/boarded/pending), so the seat frees up automatically.
+ * Deadline for a counter booking = departure time − COUNTER_HOLD_HOURS_BEFORE_DEPARTURE.
+ * Falls back to a fixed window when departure can't be parsed, and never goes
+ * below COUNTER_MIN_HOLD_MINUTES from creation.
+ */
+export function computeCounterDeadline(departure: string, tripDate: string, createdAt?: string): Date {
+  const base = createdAt ? new Date(createdAt) : new Date();
+  const departureDate = parseDepartureTime(departure, tripDate);
+  if (!departureDate) {
+    return new Date(base.getTime() + COUNTER_FALLBACK_HOLD_HOURS * 60 * 60 * 1000);
+  }
+  const deadline = new Date(departureDate.getTime() - COUNTER_HOLD_HOURS_BEFORE_DEPARTURE * 60 * 60 * 1000);
+  const minDeadline = new Date(base.getTime() + COUNTER_MIN_HOLD_MINUTES * 60 * 1000);
+  return deadline > minDeadline ? deadline : minDeadline;
+}
+
+/** Effective deadline for a stored counter booking (falls back to stored value). */
+export function getCounterDeadline(booking: { counterDeadline?: string; createdAt?: string }): Date {
+  if (booking.counterDeadline) {
+    const d = new Date(booking.counterDeadline);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date(Date.now() + COUNTER_FALLBACK_HOLD_HOURS * 60 * 60 * 1000);
+}
+
+export function isBookingExpired(booking: { status?: string; createdAt?: string; idVerifiedAt?: string; counterDeadline?: string }): boolean {
+  if (booking.status === "pending") return getPaymentDeadline(booking).getTime() <= Date.now();
+  if (booking.status === "counter") return getCounterDeadline(booking).getTime() <= Date.now();
+  return false;
+}
+
+/**
+ * Mark pending bookings past their payment window and counter bookings past
+ * their counter deadline as "expired". Expired bookings no longer block their
+ * seat (availability only counts paid/boarded/pending/counter), so the seat
+ * frees up automatically.
  */
 export async function expireStalePendingBookings(): Promise<number> {
   try {
     const { data, error } = await supabase
       .from("bookings")
-      .select("id, created_at, id_verified_at")
-      .eq("status", "pending");
+      .select("id, status, created_at, id_verified_at, counter_deadline")
+      .in("status", ["pending", "counter"]);
     if (error) throw error;
 
     const staleIds = (data || [])
-      .filter((b: any) =>
-        getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now()
-      )
+      .filter((b: any) => {
+        if (b.status === "counter") {
+          return getCounterDeadline({ counterDeadline: b.counter_deadline, createdAt: b.created_at }).getTime() <= Date.now();
+        }
+        return getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now();
+      })
       .map((b: any) => b.id);
 
     if (staleIds.length === 0) return 0;
@@ -936,14 +992,14 @@ export async function getSeatsForShipAndDate(
     .order("row_num", { ascending: true }).order("col_num", { ascending: true });
   if (seatErr) throw seatErr;
 
-  // Get PAID, BOARDED, or PENDING (reservations) bookings for this specific trip date
+  // Get PAID, BOARDED, PENDING, or COUNTER (reservations) bookings for this specific trip date
   // This ensures that reservations correctly 'mark' or hold the seat.
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select("seat_id, board_stop, alight_stop, status, created_at, id_verified_at")
+    .select("seat_id, board_stop, alight_stop, status, created_at, id_verified_at, counter_deadline")
     .eq("ship_id", shipId)
     .eq("trip_date", tripDate)
-    .in("status", ["paid", "boarded", "pending"]);
+    .in("status", ["paid", "boarded", "pending", "counter"]);
 
   // Build set of taken seat IDs for this leg
   const takenSeatIds = new Set<string>();
@@ -960,6 +1016,10 @@ export async function getSeatsForShipAndDate(
     for (const b of bookingData) {
       // A pending booking past its payment window does NOT hold the seat.
       if (b.status === "pending" && getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now()) {
+        continue;
+      }
+      // A counter booking past its counter deadline does NOT hold the seat either.
+      if (b.status === "counter" && getCounterDeadline({ counterDeadline: b.counter_deadline, createdAt: b.created_at }).getTime() <= Date.now()) {
         continue;
       }
       if (newStart === undefined || newEnd === undefined || !b.board_stop || !b.alight_stop) {
@@ -1034,7 +1094,7 @@ export async function getBookingsByShipAndDate(shipId: string, tripDate: string)
 export async function getBookingsByUser(userId: string): Promise<Booking[]> {
   const { data, error } = await supabase.from("bookings").select("*")
     .eq("user_id", userId)
-    .in("status", ["paid", "boarded", "cancelled", "pending", "expired"])
+    .in("status", ["paid", "boarded", "cancelled", "pending", "expired", "counter"])
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data.map(dbToBooking);
@@ -1058,6 +1118,7 @@ export function dbToBooking(row: any): Booking {
     passengerName: row.passenger_name, passengerType: row.passenger_type,
     phone: row.phone, status: row.status, qrCode: row.qr_code,
     createdAt: row.created_at, userId: row.user_id,
+    counterDeadline: row.counter_deadline || undefined,
     accommodationType: row.accommodation_type,
     tripDate: row.trip_date,
     boardStop: row.board_stop,
@@ -1094,6 +1155,7 @@ export async function saveBooking(booking: Booking): Promise<void> {
     status: booking.status,
     qr_code: booking.qrCode,
     created_at: booking.createdAt,
+    counter_deadline: booking.counterDeadline || null,
     user_id: booking.userId ?? null,
     accommodation_type: booking.accommodationType ?? "seat",
     trip_date: booking.tripDate ?? getLocalDate(),
@@ -1120,7 +1182,20 @@ export async function updateBooking(id: string, updates: Partial<Booking>): Prom
   const dbUpdates: any = {};
   if (updates.status !== undefined) dbUpdates.status = updates.status;
   if (updates.seatLabel) dbUpdates.seat_label = updates.seatLabel;
+  if (updates.counterDeadline !== undefined) dbUpdates.counter_deadline = updates.counterDeadline;
   const { error } = await supabase.from("bookings").update(dbUpdates).eq("id", id);
+  if (error) throw error;
+}
+
+/**
+ * Mark bookings as reserved-for-counter (held seat, pay at the terminal counter).
+ * Sets status = 'counter' and the counter deadline that gates seat release.
+ */
+export async function markBookingsCounter(ids: string[], deadline: Date): Promise<void> {
+  const { error } = await supabase.from("bookings").update({
+    status: "counter",
+    counter_deadline: deadline.toISOString(),
+  }).in("id", ids);
   if (error) throw error;
 }
 
@@ -1395,7 +1470,7 @@ export async function cancelShipDate(shipId: string, date: string, reason: strin
     .select("*")
     .eq("ship_id", shipId)
     .eq("trip_date", date)
-    .in("status", ["paid", "pending"]);
+    .in("status", ["paid", "pending", "counter"]);
 
   if (affectedBookings && affectedBookings.length > 0) {
     const bookingIds = affectedBookings.map((b: any) => b.id);

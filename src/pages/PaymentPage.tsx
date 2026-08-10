@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { saveBooking, generateId, getLocalDate, getCurrentUser, supabase, getShipById, updateBookingToRegular } from "@/lib/store";
+import { saveBooking, generateId, getLocalDate, getCurrentUser, supabase, getShipById, updateBookingToRegular, markBookingsCounter, computeCounterDeadline } from "@/lib/store";
 import { ArrowLeft, Loader2, AlertCircle, Shield } from "lucide-react";
 import { useEffect } from "react";
 
@@ -238,6 +238,42 @@ const PaymentPage = () => {
     }
   };
 
+  const handlePayCounter = async () => {
+    if (isExpired) {
+      setError("This booking has expired. Please book a new trip.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const ids = isGroup ? passengers.map(p => p.bookingId) : [bookingId];
+
+      // PERSIST FINAL PRICES (same as the online flow) before reserving
+      if (isGroup) {
+        await Promise.all(passengers.map(p =>
+          supabase.from("bookings").update({ leg_price: p.price }).eq("id", p.bookingId)
+        ));
+      } else {
+        await supabase.from("bookings").update({ leg_price: finalPrice }).eq("id", bookingId);
+      }
+
+      const deadline = computeCounterDeadline(ship?.departure || "", tripDate || getLocalDate());
+      await markBookingsCounter(ids, deadline);
+
+      const refs = ids.map(id => `SPT-${id}`);
+      sessionStorage.setItem("pending_counter_booking_ids", ids.join(","));
+      sessionStorage.setItem("pending_counter_deadline", deadline.toISOString());
+
+      navigate("/counter-confirmation", {
+        state: { bookingIds: ids, refs, deadline: deadline.toISOString() },
+      });
+    } catch (e: any) {
+      setError(e.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSwitchToRegular = async () => {
     try {
       setLoading(true);
@@ -246,7 +282,7 @@ const PaymentPage = () => {
       await updateBookingToRegular(bookingId, fullPrice);
       // Update local state to unlock
       setCurrentStatus("none");
-      window.location.reload(); 
+      window.location.reload();
     } catch (err: any) {
       setError("Failed to switch: " + err.message);
     } finally {
@@ -418,7 +454,22 @@ const PaymentPage = () => {
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-2xl">💚</span>}
             Pay via Maya
           </motion.button>
+
+          <motion.button 
+            whileHover={!loading && !isExpired ? { scale: 1.02 } : {}} 
+            whileTap={!loading && !isExpired ? { scale: 0.98 } : {}}
+            disabled={loading || isExpired} 
+            onClick={handlePayCounter}
+            className={`w-full py-4 rounded-2xl font-display font-bold text-lg flex items-center justify-center gap-3 bg-[#B45309] hover:bg-[#B45309]/90 text-white transition-all ${(loading || isExpired) ? "opacity-40 cursor-not-allowed grayscale" : ""}`}
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-2xl">🧾</span>}
+            Pay at the Counter
+          </motion.button>
         </div>
+
+        <p className="text-[10px] text-muted-foreground text-center mt-3 uppercase tracking-tighter font-bold">
+          Pay at the Counter — reserve your seat now, pay cash at the terminal counter.
+        </p>
 
         {currentStatus === "pending" && (
           <div className="mt-6 pt-6 border-t border-white/5">

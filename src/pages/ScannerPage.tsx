@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { addScanRecord, updateBooking, generateId, getLocalDate } from "@/lib/store";
 import {
   ScanLine, ArrowLeft, Keyboard, AlertTriangle,
-  CheckCircle, XCircle, Camera, CameraOff, Loader2, ShieldAlert, X, LogOut, Users
+  CheckCircle, XCircle, Camera, CameraOff, Loader2, ShieldAlert, X, LogOut, Users, Wallet
 } from "lucide-react";
 import { supabase } from "@/lib/store";
 import { Html5Qrcode } from "html5-qrcode";
@@ -15,7 +15,7 @@ const ScannerPage = () => {
   const [starting, setStarting] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [scanResult, setScanResult] = useState<{
-    type: "success" | "duplicate" | "invalid";
+    type: "success" | "duplicate" | "invalid" | "counter";
     message: string;
     booking?: any;
   } | null>(null);
@@ -96,20 +96,34 @@ const ScannerPage = () => {
     try {
       const cleanCode = code.trim();
       let { data: booking, error } = await supabase
-        .from("bookings").select("*").eq("qr_code", cleanCode)
-        .in("status", ["paid", "boarded"]).maybeSingle();
+        .from("bookings").select("*").eq("qr_code", cleanCode).maybeSingle();
 
       if (!booking) {
         const altCode = cleanCode.replace(/^SPT-/, "");
         const { data: altBooking } = await supabase
           .from("bookings").select("*")
           .or(`id.eq.${cleanCode},id.eq.${altCode},qr_code.eq.SPT-${cleanCode},qr_code.eq.${altCode}`)
-          .in("status", ["paid", "boarded"]).maybeSingle();
+          .maybeSingle();
         if (altBooking) booking = altBooking;
       }
 
       if (!booking) {
         setScanResult({ type: "invalid", message: "No valid booking found" }); return;
+      }
+
+      // ── Counter (pay-at-counter) reservation: not yet paid → send to counter ──
+      if (booking.status === "counter") {
+        setScanResult({
+          type: "counter",
+          message: "PAY AT THE COUNTER",
+          booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label },
+        });
+        return;
+      }
+
+      // Only paid/boarded tickets pass through to boarding validation
+      if (!["paid", "boarded"].includes(booking.status)) {
+        setScanResult({ type: "invalid", message: "Ticket not paid — complete payment first" }); return;
       }
 
       // ── Ship Details for Validation ──
@@ -307,15 +321,21 @@ const ScannerPage = () => {
       {scanResult && (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
           className={`rounded-2xl p-6 mb-6 border glass-card ${scanResult.type === "success" ? "border-green-500/50" :
-            scanResult.type === "duplicate" ? "border-amber-500/50" : "border-destructive/50"
+            scanResult.type === "duplicate" || scanResult.type === "counter" ? "border-amber-500/50" : "border-destructive/50"
             }`}>
           <div className="text-center mb-4">
             {scanResult.type === "success" && <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-2" />}
             {scanResult.type === "duplicate" && <AlertTriangle className="w-16 h-16 text-amber-500 mx-auto mb-2" />}
+            {scanResult.type === "counter" && <Wallet className="w-16 h-16 text-amber-500 mx-auto mb-2" />}
             {scanResult.type === "invalid" && <XCircle className="w-16 h-16 text-destructive mx-auto mb-2" />}
             <p className={`font-display font-bold text-lg ${scanResult.type === "success" ? "text-green-500" :
-              scanResult.type === "duplicate" ? "text-amber-500" : "text-destructive"
+              scanResult.type === "duplicate" || scanResult.type === "counter" ? "text-amber-500" : "text-destructive"
               }`}>{scanResult.message}</p>
+            {scanResult.type === "counter" && (
+              <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-widest font-bold">
+                Unpaid reservation — collect payment at the terminal counter
+              </p>
+            )}
           </div>
           {scanResult.booking && (
             <div className="text-center space-y-1">
