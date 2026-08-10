@@ -6,9 +6,11 @@ import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
   CheckCircle, AlertTriangle, History, UserCog, ChevronDown, ChevronRight,
-  Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw, Printer, HandCoins
+  Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw, Printer, HandCoins,
+  ScanLine, Keyboard, Camera, CameraOff, Wallet
 } from "lucide-react";
 import { supabase } from "@/lib/store";
+import { Html5Qrcode } from "html5-qrcode";
 
 // ─── Defined OUTSIDE component to prevent cursor-jump on re-render ────────────
 
@@ -115,7 +117,7 @@ const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void })
 };
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
-type Tab = "manifest" | "seats" | "history" | "staff" | "vessel" | "reviews" | "verification";
+type Tab = "manifest" | "scan" | "seats" | "history" | "staff" | "vessel" | "reviews" | "verification";
 function getLocalDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 const today = getLocalDate();
 
@@ -167,6 +169,17 @@ const AdminDashboard = () => {
   const [verificationBookings, setVerificationBookings] = useState<any[]>([]);
   const [expandedYears, setExpandedYears]     = useState<string[]>([today.split("-")[0]]);
   const [expandedMonths, setExpandedMonths]   = useState<string[]>([]);
+
+  // ── Counter scanner state ──
+  const [scanCameraActive, setScanCameraActive] = useState(false);
+  const [scanStarting, setScanStarting]         = useState(false);
+  const [scanProcessing, setScanProcessing]     = useState(false);
+  const [scanManualCode, setScanManualCode]     = useState("");
+  const [scanError, setScanError]               = useState("");
+  const [scanSuccessMsg, setScanSuccessMsg]     = useState("");
+  const [scanBooking, setScanBooking]           = useState<any | null>(null);
+  const scanQrRef = useRef<Html5Qrcode | null>(null);
+  const scanHasScanned = useRef(false);
 
   // Staff and Ship Modals
   const [newName, setNewName]         = useState("");
@@ -362,6 +375,104 @@ const AdminDashboard = () => {
     window.open(`/print-ticket/${bookingId}`, "_blank");
   };
 
+  // ── Counter scanner: scan reservation QR → popup → approve → activate QR ────
+  const startScanCamera = async () => {
+    setScanStarting(true);
+    scanHasScanned.current = false;
+    setScanError("");
+    setScanSuccessMsg("");
+    setScanCameraActive(true);
+    setTimeout(async () => {
+      if (!scanQrRef.current) {
+        scanQrRef.current = new Html5Qrcode("admin-qr-reader");
+      }
+      try {
+        await scanQrRef.current.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (!scanHasScanned.current) {
+              scanHasScanned.current = true;
+              stopScanCamera();
+              processScanCode(decodedText);
+            }
+          },
+          () => { } // ignore frame scanning errors
+        );
+        setScanStarting(false);
+      } catch (err: any) {
+        console.error("Camera start error:", err);
+        alert("Could not access camera.\nError: " + String(err));
+        setScanCameraActive(false);
+        setScanStarting(false);
+      }
+    }, 100);
+  };
+
+  const stopScanCamera = () => {
+    if (scanQrRef.current && scanQrRef.current.isScanning) {
+      scanQrRef.current.stop().catch(() => { });
+    }
+    setScanCameraActive(false);
+  };
+
+  const processScanCode = async (code: string) => {
+    if (scanProcessing) return;
+    setScanProcessing(true);
+    setScanError("");
+    setScanSuccessMsg("");
+    try {
+      const cleanCode = code.trim();
+      let { data: booking } = await supabase.from("bookings").select("*").eq("qr_code", cleanCode).maybeSingle();
+      if (!booking) {
+        const altCode = cleanCode.replace(/^SPT-/, "");
+        const { data: altBooking } = await supabase.from("bookings").select("*")
+          .or(`id.eq.${cleanCode},id.eq.${altCode},qr_code.eq.SPT-${cleanCode},qr_code.eq.${altCode}`)
+          .maybeSingle();
+        if (altBooking) booking = altBooking;
+      }
+      if (!booking) { setScanError("No booking found for that code."); return; }
+
+      if (booking.status === "counter") { setScanBooking(booking); return; }
+      if (["paid", "boarded"].includes(booking.status)) {
+        setScanSuccessMsg(`${booking.passenger_name} is already confirmed (${booking.status}) — QR is active.`);
+        return;
+      }
+      setScanError(`Ticket status is "${booking.status}" — not a payable counter reservation.`);
+    } catch {
+      setScanError("Error processing scan. Try again.");
+    } finally {
+      setScanProcessing(false);
+    }
+  };
+
+  const handleScanManual = () => {
+    if (scanManualCode.trim()) {
+      processScanCode(scanManualCode.trim());
+      setScanManualCode("");
+    }
+  };
+
+  const handleApproveScan = async () => {
+    if (!scanBooking) return;
+    setLoading(true);
+    try {
+      await supabase.from("bookings").update({ status: "paid" }).eq("id", scanBooking.id);
+      await addSystemLog("COUNTER_APPROVE", `Activated QR for ${scanBooking.passenger_name} (${scanBooking.id})`, currentStaff.name);
+      const name = scanBooking.passenger_name;
+      setScanBooking(null);
+      setScanSuccessMsg(`${name} marked PAID — boarding QR activated`);
+      loadShipData();
+    } catch (err: any) {
+      alert("Failed to approve: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => () => stopScanCamera(), []);
+  useEffect(() => { if (activeTab !== "scan") stopScanCamera(); }, [activeTab]);
+
   const currentShip = ships.find(s => s.id === selectedShipId);
   const downloadCSV = (bookings: any[], label: string) => {
     const csv = [["Name","Type","Seat","Phone"], ...bookings.map(b => [b.passengerName, b.passengerType, b.seatLabel, b.phone])].map(r => r.join(",")).join("\n");
@@ -370,6 +481,7 @@ const AdminDashboard = () => {
 
   const TABS: { id: Tab; label: string; icon: any }[] = [
     { id: "manifest", label: "Manifest", icon: FileText },
+    { id: "scan",     label: "Scan & Confirm", icon: ScanLine },
     { id: "seats",    label: "Seats",    icon: Armchair },
     { id: "history",  label: "History",  icon: History },
     { id: "staff",    label: "Staff",    icon: UserCog },
@@ -852,6 +964,69 @@ const AdminDashboard = () => {
                 </div>
               )}
 
+              {activeTab === "scan" && (
+                <div className="space-y-4">
+                  <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-lg font-black text-foreground tracking-tight">Counter Scanner</h2>
+                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">Scan a reservation QR → approve payment → activate the boarding code</p>
+                      </div>
+                      <button onClick={scanCameraActive ? stopScanCamera : startScanCamera} disabled={scanStarting}
+                        className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-60 ${scanCameraActive ? "bg-destructive/15 text-destructive border border-destructive/30" : "bg-primary text-white shadow-lg shadow-primary/20"}`}>
+                        {scanStarting ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting...</> :
+                          scanCameraActive ? <><CameraOff className="w-4 h-4" /> Stop</> :
+                            <><Camera className="w-4 h-4" /> Start Camera</>}
+                      </button>
+                    </div>
+
+                    <div className={`relative rounded-2xl overflow-hidden bg-black ${scanCameraActive ? "block" : "hidden"}`} style={{ minHeight: "320px" }}>
+                      <div id="admin-qr-reader" className="w-full h-full absolute inset-0 [&>video]:object-cover [&>video]:h-full" />
+                    </div>
+
+                    {!scanCameraActive && !scanStarting && (
+                      <div className="text-center py-8">
+                        <ScanLine className="w-12 h-12 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">Tap Start to scan a reservation QR</p>
+                      </div>
+                    )}
+                    {scanProcessing && (
+                      <div className="flex items-center justify-center gap-2 py-3 text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Looking up booking...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Keyboard className="w-5 h-5 text-primary" />
+                      <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Manual Entry</h3>
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={scanManualCode} onChange={e => setScanManualCode(e.target.value)} placeholder="SPT-XXXXXXXXXXXX"
+                        className="flex-1 px-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono text-sm"
+                        onKeyDown={(e) => e.key === "Enter" && handleScanManual()} />
+                      <button onClick={handleScanManual} disabled={scanProcessing}
+                        className="px-6 py-3 rounded-xl bg-primary text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition-all flex items-center gap-2 disabled:opacity-60">
+                        <ScanLine className="w-4 h-4" /> Look Up
+                      </button>
+                    </div>
+                  </div>
+
+                  {scanError && (
+                    <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive text-sm text-center font-bold">
+                      {scanError}
+                    </div>
+                  )}
+                  {scanSuccessMsg && (
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-sm text-center font-bold flex items-center justify-center gap-2">
+                      <CheckCircle className="w-4 h-4" /> {scanSuccessMsg}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeTab === "verification" && (
                 <div className="space-y-8">
                   <div className="flex items-center justify-between px-1">
@@ -1058,6 +1233,69 @@ const AdminDashboard = () => {
               </motion.div>
            </div>
          )}
+      </AnimatePresence>
+
+      {/* Counter Approval Modal */}
+      <AnimatePresence>
+        {scanBooking && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/95 backdrop-blur-xl">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass-card w-full max-w-md rounded-[2.5rem] p-8 border-border/50 relative text-white overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+              <button onClick={() => setScanBooking(null)} className="absolute top-6 right-6 p-1 text-muted-foreground hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl bg-[#B45309]/20 flex items-center justify-center text-[#F59E0B]"><Wallet className="w-6 h-6" /></div>
+                <div>
+                  <h3 className="text-xl font-black tracking-tight">Reservation Found</h3>
+                  <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mt-0.5">Unpaid counter reservation — collect payment to activate</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <p className="text-sm font-black text-foreground">{scanBooking.passenger_name}</p>
+                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-0.5">Seat {scanBooking.seat_label} · {scanBooking.passenger_type}</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase tracking-widest">
+                    Unpaid
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
+                    <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Vessel</p>
+                    <p className="text-[10px] font-bold text-foreground truncate">{allShipsForMapping.find(s => s.id === scanBooking.ship_id)?.name || "—"}</p>
+                  </div>
+                  <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
+                    <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Trip Date</p>
+                    <p className="text-[10px] font-bold text-foreground">{scanBooking.trip_date}</p>
+                  </div>
+                  <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
+                    <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Route</p>
+                    <p className="text-[10px] font-bold text-foreground truncate">{scanBooking.board_stop} → {scanBooking.alight_stop}</p>
+                  </div>
+                  <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
+                    <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Amount</p>
+                    <p className="text-[12px] font-black text-primary">₱{(scanBooking.leg_price || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+                {scanBooking.counter_deadline && (
+                  <p className="text-[10px] text-muted-foreground mt-4 text-center font-mono">
+                    Hold expires: {new Date(scanBooking.counter_deadline).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
+                  </p>
+                )}
+              </div>
+
+              <button onClick={handleApproveScan} disabled={loading}
+                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <HandCoins className="w-4 h-4" />}
+                Collect Payment & Activate QR
+              </button>
+              <button onClick={() => setScanBooking(null)} className="w-full py-3 mt-2 text-[10px] text-muted-foreground hover:text-white uppercase tracking-widest">
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Rejection Modal */}

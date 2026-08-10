@@ -367,26 +367,28 @@ const DigitalTicket = () => {
                </div>
             </div>
           ) : activeBooking.status === "counter" ? (
-            <div className="bg-[#B45309]/10 border border-[#B45309]/20 p-8 rounded-3xl w-full text-center relative overflow-hidden">
+            <div className="bg-[#B45309]/10 border border-[#B45309]/20 p-5 rounded-3xl w-full text-center relative overflow-hidden">
                <div className="absolute inset-0 bg-white/5 backdrop-blur-sm pointer-events-none" />
 
                <div className="relative z-10 flex flex-col items-center">
-                 <div className="w-16 h-16 rounded-2xl bg-[#B45309]/20 flex items-center justify-center text-[#F59E0B] mb-6 border border-[#B45309]/30">
-                    <Wallet className="w-8 h-8 animate-pulse" />
+                 <div className="flex items-center gap-1.5 text-[#F59E0B] text-[10px] font-black uppercase tracking-widest mb-4">
+                    <Wallet className="w-3.5 h-3.5" /> Reserved — not yet activated
                  </div>
-                 <h3 className="font-display font-black text-xl text-white uppercase tracking-widest mb-2">Reserved at the Counter</h3>
-                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[220px] mx-auto mb-3 font-medium">
-                   Your seat is held. Pay at the terminal counter before the deadline to get your boarding QR code.
+                 <div className="bg-white p-3 rounded-2xl shadow-inner relative">
+                    <QRImage value={activeBooking.qrCode} size={180} />
+                    <div className="absolute inset-0 bg-[#B45309]/10 backdrop-blur-[2px] rounded-2xl flex items-center justify-center pointer-events-none">
+                      <span className="px-3 py-1 bg-[#B45309] text-white text-[10px] font-black uppercase tracking-widest rounded-full -rotate-6 border border-[#F59E0B]/50 shadow-lg">
+                        Not Active
+                      </span>
+                    </div>
+                 </div>
+                 <p className="font-mono text-sm text-[#F59E0B] font-bold tracking-widest mt-3">{activeBooking.qrCode}</p>
+                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed max-w-[270px]">
+                    Show this code at the terminal counter. Staff will scan it, take your payment, and activate the boarding QR.
                  </p>
-                 <p className="text-[#F59E0B] text-sm font-bold mb-8 flex items-center gap-1.5">
-                   <Clock className="w-4 h-4" /> Pay by {getCounterDeadline(activeBooking).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
+                 <p className="text-[#F59E0B] text-xs font-bold mt-4 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> Pay by {getCounterDeadline(activeBooking).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
                  </p>
-                 <button
-                  onClick={() => navigate("/my-tickets")}
-                  className="w-full py-4 bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 cursor-pointer"
-                 >
-                   My Tickets
-                 </button>
                </div>
             </div>
           ) : (
