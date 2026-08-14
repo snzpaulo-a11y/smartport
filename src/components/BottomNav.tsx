@@ -27,12 +27,12 @@ const BottomNav = () => {
                 className="flex-1 flex flex-col items-center justify-center gap-1 min-h-12 group relative"
               >
                 <div className={`relative flex items-center justify-center w-11 h-8 rounded-2xl transition-all duration-300 ${
-                  isActive ? "bg-[#E3000F]/10 text-[#E3000F]" : "text-slate-600 group-hover:text-[#E3000F]"
+                  isActive ? "bg-[#E3000F]/10 text-[#E3000F]" : "text-slate-300 group-hover:text-[#E3000F]"
                 }`}>
                   <Icon className={`w-[22px] h-[22px] ${isActive ? "fill-[#E3000F]/15" : ""}`} strokeWidth={isActive ? 2.4 : 2} />
                 </div>
                 <span className={`text-[10px] font-bold tracking-[0.06em] uppercase transition-colors ${
-                  isActive ? "text-[#E3000F]" : "text-slate-600"
+                  isActive ? "text-[#E3000F]" : "text-slate-300"
                 }`}>
                   {item.name}
                 </span>

@@ -40,21 +40,31 @@ export const IDVerificationNotifier = () => {
 
           // Check if id_verification_status changed
           if (
-            newRecord &&
-            newRecord.id_verification_status !== oldRecord?.id_verification_status
+            !newRecord ||
+            newRecord.id_verification_status === oldRecord?.id_verification_status
           ) {
+            return;
+          }
+
+          const bookingId = newRecord.id;
+
+          // Only notify when this booking belongs to the current user (or the
+          // current session). Other passengers' PII must never reach this device.
+          void supabase.auth.getUser().then(({ data: auth }) => {
+            const currentUid = auth?.user?.id || null;
+            const bookingOwnerId = newRecord.user_id || null;
+            const isOwner = Boolean(currentUid) && bookingOwnerId === currentUid;
+            const isSessionBooking =
+              sessionStorage.getItem("current_booking_id") === bookingId;
+            if (!isOwner && !isSessionBooking) return;
+
             const status = newRecord.id_verification_status;
             const passengerName = newRecord.passenger_name || "Passenger";
-            const bookingId = newRecord.id;
             const shipId = newRecord.ship_id;
             const seatId = newRecord.seat_id;
 
-            // Check if this booking belongs to the current user/session
-            const currentBookingId = sessionStorage.getItem("current_booking_id");
-            const isRelevant = currentBookingId === bookingId || !currentBookingId;
-
             if (status === "verified") {
-              const title = "ID Verified! 🎉";
+              const title = "ID Verified!";
               const body = `Great news ${passengerName}! Your discount ID has been approved by the Admin. You can now complete your payment.`;
 
               // Trigger Native Push Notification if permitted
@@ -111,7 +121,7 @@ export const IDVerificationNotifier = () => {
               );
             } else if (status === "rejected") {
               const reason = newRecord.id_rejected_reason || "ID document unreadable or invalid";
-              const title = "ID Verification Rejected ⚠️";
+              const title = "ID Verification Rejected";
               const body = `Hi ${passengerName}, your discount ID request was rejected: ${reason}`;
 
               // Trigger Native Push Notification if permitted
@@ -154,7 +164,7 @@ export const IDVerificationNotifier = () => {
                 { duration: 10000 }
               );
             }
-          }
+          });
         }
       )
       .subscribe();

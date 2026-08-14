@@ -62,6 +62,20 @@ export default function LoginPage() {
     };
   }, []);
 
+  // Prefer a server-issued reset code (request_password_reset RPC). Falls back
+  // to client generation so the flow still works before the SQL is applied.
+  const issueRecoveryCode = async (targetEmail: string): Promise<string> => {
+    try {
+      const { data: rpcCode, error } = await supabase.rpc("request_password_reset", {
+        p_email: targetEmail,
+      });
+      if (!error && rpcCode) return String(rpcCode);
+    } catch (e) {
+      /* fall through to client-side generation */
+    }
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
   const handleForgotPasswordSubmit = async () => {
     setError("");
     setLoading(true);
@@ -100,7 +114,7 @@ export default function LoginPage() {
           throw new Error("This email is not registered on Starhorse.");
         }
 
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const code = await issueRecoveryCode(recoveryIdentifier);
         setGeneratedRecoveryOtp(code);
 
         try {
@@ -145,7 +159,7 @@ export default function LoginPage() {
           throw new Error("This phone number is not registered on Starhorse.");
         }
 
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const code = await issueRecoveryCode(shadowEmail);
         setGeneratedRecoveryOtp(code);
 
         try {
@@ -208,15 +222,17 @@ export default function LoginPage() {
       if (error) {
         console.warn("Native updateUser failed (no active session), trying RPC:", error.message);
 
-        // Use the SQL RPC fallback to update the password directly in database auth schema
+        // Use the SQL RPC fallback to update the password directly in database auth schema.
+        // The hardened RPC requires the issued recovery OTP (single-use, 10-min expiry).
         const { data: rpcSuccess, error: rpcError } = await supabase.rpc("reset_user_password", {
-          user_email: targetEmail,
-          new_password: newPassword
+          p_email: targetEmail,
+          p_code: recoveryOtp,
+          p_new_password: newPassword
         });
 
         if (rpcError || !rpcSuccess) {
           console.error("RPC reset failed:", rpcError);
-          setError("Password reset failed. The database reset function is missing — run the reset_user_password SQL in your Supabase SQL Editor, then try again.");
+          setError("Password reset failed. The database reset function is missing — run security_hardening.sql in your Supabase SQL Editor, then try again.");
         } else {
           resetOk = true;
           setError("Password updated successfully! You can now log in.");
@@ -318,7 +334,6 @@ export default function LoginPage() {
 
           const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
           setGeneratedOtp(newOtp);
-          console.log("EXPECTED OTP AND YOUR INPUT:", newOtp);
 
           try {
             if (isEmailMethod) {

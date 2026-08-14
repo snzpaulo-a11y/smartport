@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, updateIDVerificationStatus } from "@/lib/store";
+import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings } from "@/lib/store";
 import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
   CheckCircle, AlertTriangle, History, UserCog, ChevronDown, ChevronRight,
   Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw, Printer, HandCoins,
-  ScanLine, Keyboard, Camera, CameraOff, Wallet, Search
+  ScanLine, Keyboard, Camera, CameraOff, Wallet, Search, Calendar
 } from "lucide-react";
 import { supabase } from "@/lib/store";
 import { Html5Qrcode } from "html5-qrcode";
@@ -82,6 +82,12 @@ const ReservationRow = ({ b, onSelect }: { b: any; onSelect: (id: string) => voi
         <p className="font-bold text-foreground text-sm tracking-tight">{b.passengerName || b.passenger_name}</p>
         <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Seat {b.seatLabel || b.seat_label} · {b.phone}</p>
         <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-tighter font-mono">{b.qr_code}</p>
+        {b.tripDate && (
+          <p className="text-[10px] text-amber-500 font-bold mt-1 uppercase tracking-tighter flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            Sailing {new Date(b.tripDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+          </p>
+        )}
       </div>
     </div>
     <div className="flex items-center gap-2 shrink-0">
@@ -124,10 +130,6 @@ const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void })
               <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest shrink-0">Email</p>
               <p className="text-[10px] font-bold text-foreground font-mono truncate">{s.email}</p>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest shrink-0">Security Key</p>
-              <p className="text-[11px] font-bold text-primary font-mono select-all truncate">{s.password}</p>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -137,7 +139,6 @@ const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void })
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 type Tab = "manifest" | "reservations" | "scan" | "seats" | "history" | "staff" | "vessel" | "reviews" | "verification";
-function getLocalDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 const today = getLocalDate();
 
 function groupByDate(bookings: any[]) {
@@ -187,6 +188,7 @@ const AdminDashboard = () => {
   const [loading, setLoading]                 = useState(false);
   const [verificationBookings, setVerificationBookings] = useState<any[]>([]);
   const [reservations, setReservations]                 = useState<any[]>([]);
+  const [allReservations, setAllReservations]           = useState<any[]>([]);
   const [reservationSearch, setReservationSearch]       = useState("");
   const [expandedYears, setExpandedYears]     = useState<string[]>([today.split("-")[0]]);
   const [expandedMonths, setExpandedMonths]   = useState<string[]>([]);
@@ -199,6 +201,7 @@ const AdminDashboard = () => {
   const [scanError, setScanError]               = useState("");
   const [scanSuccessMsg, setScanSuccessMsg]     = useState("");
   const [scanBooking, setScanBooking]           = useState<any | null>(null);
+  const [scanGroup, setScanGroup]               = useState<any[]>([]);
   const scanQrRef = useRef<Html5Qrcode | null>(null);
   const scanHasScanned = useRef(false);
 
@@ -216,7 +219,7 @@ const AdminDashboard = () => {
   
   const [newShipModel, setNewShipModel] = useState<any>({ 
     name: "", type: adminType, stops: [{ location: "", departure: "", arrival: "-" }, { location: "", departure: "-", arrival: "" }],
-    price: 100, totalSeats: 100, scheduleDays: "", paymongoSecretKey: currentStaff?.paymongoSecretKey || "", paymongoPublicKey: currentStaff?.paymongoPublicKey || ""
+    price: 100, totalSeats: 100, scheduleDays: ""
   });
 
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -253,6 +256,11 @@ const AdminDashboard = () => {
       const tripBookings = (tData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date, boardStop: r.board_stop, alightStop: r.alight_stop }));
       setTodayBookings(tripBookings.filter(b => b.status !== "counter"));
       setReservations(tripBookings.filter(b => b.status === "counter").sort((a, b) => (a.created_at || "").localeCompare(b.created_at || "")));
+
+      // All counter reservations for this ship regardless of sailing date, so
+      // future reservations (booked ahead via the calendar) are always visible.
+      const { data: rData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).eq("status", "counter").order("trip_date", { ascending: false });
+      setAllReservations((rData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date, boardStop: r.board_stop, alightStop: r.alight_stop })));
 
       const { data: hData } = await supabase.from("bookings").select("*").eq("ship_id", selectedShipId).lt("trip_date", today).in("status", ["paid", "boarded"]);
       setHistoryBookings((hData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date })));
@@ -291,9 +299,9 @@ const AdminDashboard = () => {
     if (!selectedShipId) return;
     const channel = supabase
       .channel(`admin-bookings-${selectedShipId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings', filter: `ship_id=eq.${selectedShipId}` }, () => loadShipData())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `ship_id=eq.${selectedShipId}` }, () => loadShipData())
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'bookings', filter: `ship_id=eq.${selectedShipId}` }, () => loadShipData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings', filter: `ship_id=eq."${selectedShipId}"` }, () => loadShipData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `ship_id=eq."${selectedShipId}"` }, () => loadShipData())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'bookings', filter: `ship_id=eq."${selectedShipId}"` }, () => loadShipData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selectedShipId, selectedManifestDate, loadShipData]);
@@ -396,15 +404,41 @@ const AdminDashboard = () => {
   };
 
   // ── Counter collection: cash received at the terminal → mark as paid ────────
+  // Re-validate that a counter booking can still be paid today before the
+  // admin confirms collection. Prevents collecting for cancelled/departed trips.
+  const validateCounterCollect = async (bookingId: string): Promise<string> => {
+    const { data: b } = await supabase.from("bookings")
+      .select("status, trip_date, ship_id, board_stop")
+      .eq("id", bookingId)
+      .single();
+    if (!b) throw new Error("Booking not found.");
+    if (b.status === "paid" || b.status === "boarded") return "already-confirmed";
+    if (b.status !== "counter") throw new Error(`Ticket status is "${b.status}" — not a payable counter booking.`);
+    const ship = b.ship_id ? await getShipById(b.ship_id) : null;
+    if (ship?.cancelled_dates?.includes(b.trip_date || getLocalDate())) {
+      throw new Error("This trip has been cancelled.");
+    }
+    if (b.board_stop && isStopDeparted(b.board_stop, b.trip_date || getLocalDate())) {
+      throw new Error("Boarding for this leg has already departed.");
+    }
+    return "ok";
+  };
+
   const handleCollectPaid = async (bookingId: string) => {
     if (!confirm("Confirm payment collected at the counter for this booking?")) return;
     setLoading(true);
     try {
-      await supabase.from("bookings").update({ status: "paid" }).eq("id", bookingId);
+      const verdict = await validateCounterCollect(bookingId);
+      if (verdict === "already-confirmed") { alert("This booking is already confirmed."); return; }
+      const { error } = await supabase.from("bookings").update({ status: "paid" }).eq("id", bookingId);
+      if (error) throw error;
       await addSystemLog("COUNTER_COLLECT", `Collected counter payment for booking ${bookingId}`, currentStaff.name);
+      setAllReservations(prev => prev.filter(b => b.id !== bookingId));
+      setReservations(prev => prev.filter(b => b.id !== bookingId));
+      setTodayBookings(prev => prev.filter(b => b.id !== bookingId));
       await loadShipData();
     } catch (err: any) {
-      alert("Failed to mark as paid: " + err.message);
+      alert("Failed to mark as paid: " + (err.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -472,7 +506,12 @@ const AdminDashboard = () => {
       }
       if (!booking) { setScanError("No booking found for that code."); return; }
 
-      if (booking.status === "counter") { setScanBooking(booking); return; }
+      if (booking.status === "counter") {
+        const siblings = await getBookingSiblings(booking);
+        setScanGroup([booking, ...siblings]);
+        setScanBooking(booking);
+        return;
+      }
       if (["paid", "boarded"].includes(booking.status)) {
         setScanSuccessMsg(`${booking.passenger_name} is already confirmed (${booking.status}) — QR is active.`);
         return;
@@ -496,14 +535,25 @@ const AdminDashboard = () => {
     if (!scanBooking) return;
     setLoading(true);
     try {
-      await supabase.from("bookings").update({ status: "paid" }).eq("id", scanBooking.id);
-      await addSystemLog("COUNTER_APPROVE", `Activated QR for ${scanBooking.passenger_name} (${scanBooking.id})`, currentStaff.name);
+      const verdict = await validateCounterCollect(scanBooking.id);
+      if (verdict === "already-confirmed") { setScanBooking(null); setScanGroup([]); setScanSuccessMsg("This booking is already confirmed."); return; }
+      const groupIds = scanGroup.length > 0 ? scanGroup.map(b => b.id) : [scanBooking.id];
+      const { error } = await supabase.from("bookings").update({ status: "paid" }).in("id", groupIds);
+      if (error) throw error;
+      await addSystemLog("COUNTER_APPROVE", `Activated QR for ${scanGroup.length} passenger(s) — lead ${scanBooking.passenger_name} (${scanBooking.id})${scanGroup.length > 1 ? " + group" : ""}`, currentStaff.name);
       const name = scanBooking.passenger_name;
+      const groupCount = scanGroup.length;
       setScanBooking(null);
-      setScanSuccessMsg(`${name} marked PAID — boarding QR activated`);
+      setScanGroup([]);
+      setAllReservations(prev => prev.filter(b => !groupIds.includes(b.id)));
+      setReservations(prev => prev.filter(b => !groupIds.includes(b.id)));
+      setTodayBookings(prev => prev.filter(b => !groupIds.includes(b.id)));
+      setScanSuccessMsg(groupCount > 1 ? `${groupCount} reservations marked PAID — boarding QRs activated` : `${name} marked PAID — boarding QR activated`);
       loadShipData();
     } catch (err: any) {
-      alert("Failed to approve: " + err.message);
+      setScanBooking(null);
+      setScanGroup([]);
+      setScanError("Failed to approve: " + (err.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -513,7 +563,7 @@ const AdminDashboard = () => {
   useEffect(() => { if (activeTab !== "scan") stopScanCamera(); }, [activeTab]);
 
   const currentShip = ships.find(s => s.id === selectedShipId);
-  const filteredReservations = reservations.filter(b => {
+  const filteredReservations = allReservations.filter(b => {
     const q = reservationSearch.trim().toLowerCase();
     if (!q) return true;
     return (b.passengerName || "").toLowerCase().includes(q)
@@ -608,7 +658,9 @@ const AdminDashboard = () => {
                        <div>
                          <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Seat Availability</p>
                          <p className="text-sm font-bold text-foreground">
-                           {new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
+                           {selectedManifestDate
+                             ? new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })
+                             : "Select a date"}
                          </p>
                        </div>
                        <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)}
@@ -695,38 +747,6 @@ const AdminDashboard = () => {
                            <InputField label="Accommodation Suites" type="number" value={String(currentShip.totalBunks || 0)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? {...s, totalBunks: Number(v)} : s))} />
                         </div>
 
-                        {/* Operational Schedule */}
-                        <div className="mt-12 space-y-6">
-                           <div className="flex justify-between items-center">
-                              <div>
-                                 <h3 className="text-xl font-black text-foreground tracking-tight">Weekly Operational Schedule</h3>
-                                 <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Select days this vessel is in service</p>
-                              </div>
-                           </div>
-                           <div className="flex flex-wrap gap-2">
-                              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => {
-                                 const days = currentShip.scheduleDays ? currentShip.scheduleDays.split(",").map(d => d.trim()).filter(Boolean) : [];
-                                 const isActive = days.includes(day);
-                                 return (
-                                    <button 
-                                       key={day}
-                                       onClick={() => {
-                                          const nextDays = isActive ? days.filter(d => d !== day) : [...days, day];
-                                          setShips(ships.map(s => s.id === selectedShipId ? {...s, scheduleDays: nextDays.join(",")} : s));
-                                       }}
-                                       className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-                                          isActive 
-                                             ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" 
-                                             : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"
-                                       }`}
-                                    >
-                                       {day}
-                                    </button>
-                                 );
-                              })}
-                           </div>
-                        </div>
-
                         {/* Route Matrix */}
                         <div className="mt-12 space-y-6">
                            <div className="flex justify-between items-center">
@@ -742,32 +762,76 @@ const AdminDashboard = () => {
                            </div>
                            <div className="space-y-4">
                               {getShipStops(currentShip).map((s, idx) => (
-                                 <div key={idx} className="flex flex-col md:flex-row gap-4 p-5 glass-card rounded-3xl border-border/30 bg-muted/10 items-end group">
-                                    <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : "Transit Stop"} value={s.location} onChange={v => {
-                                       const next = getShipStops(currentShip);
-                                       next[idx].location = v;
-                                       setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                    }} /></div>
-                                    <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => {
-                                       const next = getShipStops(currentShip);
-                                       next[idx].arrival = v;
-                                       setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                    }} /></div>
-                                    <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => {
-                                       const next = getShipStops(currentShip);
-                                       next[idx].departure = v;
-                                       setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                    }} /></div>
-                                    <div className="w-full md:w-28"><InputField label="Leg ₱" type="number" value={String(s.price || 0)} onChange={v => {
-                                       const next = getShipStops(currentShip);
-                                       next[idx].price = Number(v);
-                                       setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                    }} /></div>
-                                    <button onClick={() => {
-                                       const next = getShipStops(currentShip);
-                                       next.splice(idx,1);
-                                       setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                    }} className="p-3 text-destructive mb-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-5 h-5" /></button>
+                                 <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10 group">
+                                    <div className="flex flex-col md:flex-row gap-4 items-end">
+                                       <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : "Transit Stop"} value={s.location} onChange={v => {
+                                          const next = getShipStops(currentShip);
+                                          next[idx].location = v;
+                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
+                                       }} /></div>
+                                       <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => {
+                                          const next = getShipStops(currentShip);
+                                          next[idx].arrival = v;
+                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
+                                       }} /></div>
+                                       <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => {
+                                          const next = getShipStops(currentShip);
+                                          next[idx].departure = v;
+                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
+                                       }} /></div>
+                                       <div className="w-full md:w-28"><InputField label="Leg ₱" type="number" value={String(s.price || 0)} onChange={v => {
+                                          const next = getShipStops(currentShip);
+                                          next[idx].price = Number(v);
+                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
+                                       }} /></div>
+                                       <button onClick={() => {
+                                          const next = getShipStops(currentShip);
+                                          next.splice(idx,1);
+                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
+                                       }} className="p-3 text-destructive mb-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-5 h-5" /></button>
+                                    </div>
+
+                                    {/* Weekly operation for this stop */}
+                                    {(() => {
+                                       const stopDays = s.scheduleDays?.trim() ? s.scheduleDays.split(",").map(d => d.trim()).filter(Boolean) : [...SCHEDULE_DAYS];
+                                       const isDaily = stopDays.length >= SCHEDULE_DAYS.length;
+                                       const setStopDays = (daysArr: string[]) => {
+                                          const next = getShipStops(currentShip);
+                                          next[idx].scheduleDays = daysArr.length ? daysArr.join(",") : undefined;
+                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
+                                       };
+                                       return (
+                                          <div className="mt-4 pt-4 border-t border-border/20">
+                                             <div className="flex items-center gap-2 mb-2">
+                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{s.location || `Stop ${idx + 1}`} — Weekly Operation</p>
+                                                {!s.scheduleDays?.trim() && <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Defaults to Daily</span>}
+                                             </div>
+                                             <div className="flex flex-wrap gap-1.5">
+                                                <button
+                                                   onClick={() => setStopDays(isDaily ? [] : [...SCHEDULE_DAYS])}
+                                                   className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isDaily ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                                >
+                                                   Daily
+                                                </button>
+                                                {SCHEDULE_DAYS.map(day => {
+                                                   const active = stopDays.includes(day);
+                                                   return (
+                                                      <button
+                                                         key={day}
+                                                         onClick={() => {
+                                                            const nextDays = active ? stopDays.filter(d => d !== day) : [...stopDays, day];
+                                                            setStopDays(nextDays);
+                                                         }}
+                                                         className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${active ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                                      >
+                                                         {day}
+                                                      </button>
+                                                   );
+                                                })}
+                                             </div>
+                                          </div>
+                                       );
+                                    })()}
                                  </div>
                               ))}
                            </div>
@@ -807,8 +871,12 @@ const AdminDashboard = () => {
                           s={s} 
                           onRevoke={async (id) => { 
                             if(confirm("Revoke access?")) { 
-                              await supabase.from("staff").delete().eq("id", id); 
-                              loadShips(); 
+                              try {
+                                await deleteStaff(id);
+                                getStaffList(adminType).then(setStaffList);
+                              } catch (err: any) {
+                                alert("Failed to revoke access: " + (err.message || "Unknown error"));
+                              }
                             } 
                           }} 
                         />
@@ -1035,11 +1103,11 @@ const AdminDashboard = () => {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <h2 className="text-lg font-black text-foreground tracking-tight">Counter Reservations</h2>
-                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">Unpaid reservations for {selectedManifestDate} — collect payment to confirm</p>
+                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">All unpaid reservations for this vessel (any sailing date) — collect payment to confirm</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="px-4 py-1.5 glass-card rounded-full text-[10px] font-black text-primary border-primary/20 uppercase tracking-widest">
-                          {reservations.length} Pending
+                          {allReservations.length} Pending
                         </div>
                         <button onClick={loadShipData} className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary" title="Refresh">
                           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -1056,12 +1124,12 @@ const AdminDashboard = () => {
 
                   {filteredReservations.length === 0 ? (
                     <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">
-                      {reservations.length === 0 ? "No Reservations" : "No match found"}
+                      {allReservations.length === 0 ? "No Reservations" : "No match found"}
                     </div>
                   ) : (
                     <div className="grid gap-3">
                       {filteredReservations.map(b => (
-                        <ReservationRow key={b.id} b={b} onSelect={() => setScanBooking(b)} />
+                        <ReservationRow key={b.id} b={b} onSelect={() => { setScanGroup([b]); setScanBooking(b); }} />
                       ))}
                     </div>
                   )}
@@ -1296,41 +1364,60 @@ const AdminDashboard = () => {
                        <div className="flex justify-between items-center"><p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Navigation Matrix</p><button onClick={() => setNewShipModel({...newShipModel, stops: [...newShipModel.stops, { location: "", arrival: "", departure: "" }]})} className="text-primary text-[10px] font-black uppercase hover:underline">+ Add Stop</button></div>
                        <div className="space-y-4">
                           {newShipModel.stops.map((s: any, idx: number) => (
-                             <div key={idx} className="flex flex-col md:flex-row gap-4 p-5 glass-card rounded-3xl border-border/30 bg-muted/10 items-end">
-                                <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : idx === newShipModel.stops.length-1 ? "Destination" : `Node #${idx+1}`} value={s.location} onChange={v => handleStopChange(idx, "location", v)} /></div>
-                                <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => handleStopChange(idx, "arrival", v)} /></div>
-                                <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => handleStopChange(idx, "departure", v)} /></div>
-                                {newShipModel.stops.length > 2 && <button onClick={() => { const next = [...newShipModel.stops]; next.splice(idx,1); setNewShipModel({...newShipModel, stops: next}); }} className="p-3 text-destructive mb-1"><Trash2 className="w-5 h-5" /></button>}
+                             <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10">
+                                <div className="flex flex-col md:flex-row gap-4 items-end">
+                                   <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : idx === newShipModel.stops.length-1 ? "Destination" : `Node #${idx+1}`} value={s.location} onChange={v => handleStopChange(idx, "location", v)} /></div>
+                                   <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => handleStopChange(idx, "arrival", v)} /></div>
+                                   <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => handleStopChange(idx, "departure", v)} /></div>
+                                   {newShipModel.stops.length > 2 && <button onClick={() => { const next = [...newShipModel.stops]; next.splice(idx,1); setNewShipModel({...newShipModel, stops: next}); }} className="p-3 text-destructive mb-1"><Trash2 className="w-5 h-5" /></button>}
+                                </div>
+
+                                {/* Weekly operation for this stop */}
+                                {(() => {
+                                    const stopDays = s.scheduleDays?.trim() ? s.scheduleDays.split(",").map((d: string) => d.trim()).filter(Boolean) : [...SCHEDULE_DAYS];
+                                   const isDaily = stopDays.length >= SCHEDULE_DAYS.length;
+                                   const setStopDays = (daysArr: string[]) => {
+                                      const next = [...newShipModel.stops];
+                                      next[idx] = { ...next[idx], scheduleDays: daysArr.length ? daysArr.join(",") : undefined };
+                                      setNewShipModel({...newShipModel, stops: next});
+                                   };
+                                   return (
+                                      <div className="mt-4 pt-4 border-t border-border/20">
+                                         <div className="flex items-center gap-2 mb-2">
+                                            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{s.location || `Stop ${idx + 1}`} — Weekly Operation</p>
+                                            {!s.scheduleDays?.trim() && <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Defaults to Daily</span>}
+                                         </div>
+                                         <div className="flex flex-wrap gap-1.5">
+                                            <button
+                                               onClick={() => setStopDays(isDaily ? [] : [...SCHEDULE_DAYS])}
+                                               className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isDaily ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                            >
+                                               Daily
+                                            </button>
+                                            {SCHEDULE_DAYS.map(day => {
+                                               const active = stopDays.includes(day);
+                                               return (
+                                                  <button
+                                                     key={day}
+                                                     onClick={() => {
+                                                        const nextDays = active ? stopDays.filter(d => d !== day) : [...stopDays, day];
+                                                        setStopDays(nextDays);
+                                                     }}
+                                                     className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${active ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                                  >
+                                                     {day}
+                                                  </button>
+                                               );
+                                            })}
+                                         </div>
+                                      </div>
+                                   );
+                                })()}
                              </div>
                           ))}
                        </div>
                     </div>
-                    <div className="space-y-6">
-                       <div className="flex justify-between items-center"><p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Weekly Operational Schedule</p></div>
-                       <div className="flex flex-wrap gap-2">
-                          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => {
-                             const days = newShipModel.scheduleDays ? newShipModel.scheduleDays.split(",").map((d: string) => d.trim()).filter(Boolean) : [];
-                             const isActive = days.includes(day);
-                             return (
-                                <button 
-                                   key={day}
-                                   onClick={() => {
-                                      const nextDays = isActive ? days.filter((d: string) => d !== day) : [...days, day];
-                                      setNewShipModel({...newShipModel, scheduleDays: nextDays.join(",")});
-                                   }}
-                                   className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-                                      isActive 
-                                         ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" 
-                                         : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"
-                                   }`}
-                                >
-                                   {day}
-                                </button>
-                             );
-                          })}
-                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-8"><InputField label="Proposed Tariff" type="number" value={String(newShipModel.price)} onChange={v => setNewShipModel({...newShipModel, price: Number(v)})} /><InputField label="Deck Seating" type="number" value={String(newShipModel.totalSeats)} onChange={v => setNewShipModel({...newShipModel, totalSeats: Number(v)})} /></div>
+                     <div className="grid grid-cols-2 gap-8"><InputField label="Proposed Tariff" type="number" value={String(newShipModel.price)} onChange={v => setNewShipModel({...newShipModel, price: Number(v)})} /><InputField label="Deck Seating" type="number" value={String(newShipModel.totalSeats)} onChange={v => setNewShipModel({...newShipModel, totalSeats: Number(v)})} /></div>
                     {shipFormMsg && <p className="text-[10px] font-black text-center text-secondary uppercase animate-pulse">{shipFormMsg}</p>}
                     <button onClick={handleRequestShip} disabled={requestingShip} className="w-full py-5 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-primary/20 hover:scale-[1.01] active:scale-[0.98] transition-all">Submit Request</button>
                  </div>
@@ -1345,17 +1432,17 @@ const AdminDashboard = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/95 backdrop-blur-xl">
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass-card w-full max-w-md rounded-[2.5rem] p-8 border-border/50 relative text-white overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-              <button onClick={() => setScanBooking(null)} className="absolute top-6 right-6 p-1 text-muted-foreground hover:text-white transition-colors"><X className="w-5 h-5" /></button>
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-12 h-12 rounded-2xl bg-[#B45309]/20 flex items-center justify-center text-[#F59E0B]"><Wallet className="w-6 h-6" /></div>
+              <button onClick={() => { setScanBooking(null); setScanGroup([]); }} className="absolute top-6 right-6 p-1 text-muted-foreground hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-[#B45309]/20 flex items-center justify-center text-[#F59E0B]">{scanGroup.length > 1 ? <Users className="w-6 h-6" /> : <Wallet className="w-6 h-6" />}</div>
                 <div>
-                  <h3 className="text-xl font-black tracking-tight">Reservation Found</h3>
+                  <h3 className="text-xl font-black tracking-tight">{scanGroup.length > 1 ? `Group Reservation (${scanGroup.length})` : "Reservation Found"}</h3>
                   <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mt-0.5">Unpaid counter reservation — collect payment to activate</p>
                 </div>
               </div>
 
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-sm font-black text-foreground">{scanBooking.passenger_name}</p>
                     <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-0.5">Seat {scanBooking.seat_label} · {scanBooking.passenger_type}</p>
@@ -1364,6 +1451,22 @@ const AdminDashboard = () => {
                     Unpaid
                   </span>
                 </div>
+
+                <div className="space-y-2 mb-4">
+                  {scanGroup.map((gb, i) => (
+                    <div key={gb.id} className={`flex items-center justify-between bg-muted/30 rounded-2xl p-3 border ${i === 0 ? "border-amber-500/30" : "border-border/20"}`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        {i === 0 && <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[8px] font-black uppercase tracking-widest shrink-0">Lead</span>}
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-foreground truncate">{gb.passenger_name}</p>
+                          <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest opacity-60">Seat {gb.seat_label} · {gb.passenger_type}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs font-black text-foreground shrink-0">₱{(gb.leg_price || 0).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
                     <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Vessel</p>
@@ -1378,8 +1481,8 @@ const AdminDashboard = () => {
                     <p className="text-[10px] font-bold text-foreground truncate">{scanBooking.board_stop} → {scanBooking.alight_stop}</p>
                   </div>
                   <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
-                    <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Amount</p>
-                    <p className="text-[12px] font-black text-primary">₱{(scanBooking.leg_price || 0).toLocaleString()}</p>
+                    <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Total Due</p>
+                    <p className="text-[12px] font-black text-primary">₱{scanGroup.reduce((sum: number, gb) => sum + (gb.leg_price || 0), 0).toLocaleString()}</p>
                   </div>
                 </div>
                 {scanBooking.counter_deadline && (
@@ -1392,9 +1495,9 @@ const AdminDashboard = () => {
               <button onClick={handleApproveScan} disabled={loading}
                 className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <HandCoins className="w-4 h-4" />}
-                Collect Payment & Activate QR
+                Collect Payment & Activate {scanGroup.length > 1 ? `All ${scanGroup.length} QRs` : "QR"}
               </button>
-              <button onClick={() => setScanBooking(null)} className="w-full py-3 mt-2 text-[10px] text-muted-foreground hover:text-white uppercase tracking-widest">
+              <button onClick={() => { setScanBooking(null); setScanGroup([]); }} className="w-full py-3 mt-2 text-[10px] text-muted-foreground hover:text-white uppercase tracking-widest">
                 Cancel
               </button>
             </motion.div>

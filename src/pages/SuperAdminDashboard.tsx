@@ -65,8 +65,6 @@ export default function SuperAdminDashboard() {
   const [newEmail, setNewEmail] = useState("");
   const [newPass, setNewPass] = useState("");
   const [newShipType, setNewShipType] = useState("ferry");
-  const [newPaymongoSecret, setNewPaymongoSecret] = useState("");
-  const [newPaymongoPublic, setNewPaymongoPublic] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [formMsg, setFormMsg] = useState("");
   const [creating, setCreating] = useState(false);
@@ -151,12 +149,10 @@ export default function SuperAdminDashboard() {
     }
     setCreating(true);
     try {
-      // Pass the new ship type and paymongo keys to addStaff
-      await addStaff(newName, newEmail, newPass, newShipType, undefined, "admin", newPaymongoSecret, newPaymongoPublic);
+      await addStaff(newName, newEmail, newPass, newShipType, undefined, "admin");
       setFormMsg("Admin created successfully!");
       setNewName(""); setNewEmail(""); setNewPass("");
       setNewShipType("ferry");
-      setNewPaymongoSecret(""); setNewPaymongoPublic("");
       fetchData();
       setTimeout(() => setShowCreate(false), 1500);
     } catch (e: any) {
@@ -462,7 +458,6 @@ export default function SuperAdminDashboard() {
                           <th className="px-6 py-4 font-medium">Name</th>
                           <th className="px-6 py-4 font-medium">Email</th>
                           <th className="px-6 py-4 font-medium">Fleet Type</th>
-                          <th className="px-6 py-4 font-medium">Payment Setup</th>
                           <th className="px-6 py-4 font-medium">Assigned Ships</th>
                           <th className="px-6 py-4 font-medium text-right">Actions</th>
                         </tr>
@@ -476,19 +471,6 @@ export default function SuperAdminDashboard() {
                               <span className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase ${admin.role === 'super_admin' ? 'bg-[#3F70FF]/20 text-[#3F70FF]' : 'bg-emerald-500/20 text-emerald-500'}`}>
                                 {admin.shipType || (admin.role === 'super_admin' ? "System" : "N/A")}
                               </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              {admin.paymongoPublicKey ? (
-                                <div className="flex items-center gap-1.5 text-emerald-500">
-                                  <ShieldCheck className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-bold uppercase">Configured</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5 text-rose-500/50">
-                                  <AlertTriangle className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-bold uppercase italic">Missing</span>
-                                </div>
-                              )}
                             </td>
                             <td className="px-6 py-4">
                               {admin.role === 'super_admin' ? (
@@ -577,11 +559,6 @@ export default function SuperAdminDashboard() {
                             <div className="space-y-2 text-[#94A3B8] text-sm mb-4">
                               <p>Route: <span className="text-white">{s.route}</span></p>
                               <p>Capacity: <span className="text-white">{s.totalSeats} seats</span></p>
-                              <div className="pt-2 border-t border-white/5 mt-2 space-y-1">
-                                <p className="text-[10px] font-bold text-[#3F70FF] uppercase tracking-widest">Payment Setup</p>
-                                <p className="text-[11px]">Public: <span className="text-white font-mono">{s.paymongoPublicKey || "Not set"}</span></p>
-                                <p className="text-[11px]">Secret: <span className="text-white font-mono">{s.paymongoSecretKey ? `••••${s.paymongoSecretKey.slice(-4)}` : "Not set"}</span></p>
-                              </div>
                             </div>
                             <div className="flex gap-2">
                               <button onClick={() => handleConfirmShip(s.id)} className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
@@ -969,18 +946,6 @@ export default function SuperAdminDashboard() {
                     <option value="fastcraft">Fast Craft</option>
                     <option value="roro">RoRo</option>
                   </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">PayMongo Secret</label>
-                    <input type="password" placeholder="sk_test_..." value={newPaymongoSecret} onChange={(e) => setNewPaymongoSecret(e.target.value)}
-                      className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">PayMongo Public</label>
-                    <input type="text" placeholder="pk_test_..." value={newPaymongoPublic} onChange={(e) => setNewPaymongoPublic(e.target.value)}
-                      className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
-                  </div>
                 </div>
                 {formMsg && <p className={`text-sm text-center font-medium ${formMsg.includes("success") ? "text-emerald-500" : "text-rose-500"}`}>{formMsg}</p>}
                 <button onClick={handleCreateAdmin} disabled={creating} className="w-full mt-2 py-3 bg-[#3F70FF] hover:bg-[#5280FF] text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50">

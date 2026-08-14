@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { encryptData, decryptData } from "./encryption";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 /** Returns today's date in YYYY-MM-DD using the local timezone (avoids UTC drift). */
@@ -43,8 +42,6 @@ export interface Ship {
   isConfirmed?: boolean;
   stops?: string;
   cancelled_dates?: string[];
-  paymongoSecretKey?: string;
-  paymongoPublicKey?: string;
   requester_id?: string;
   requester_name?: string;
 }
@@ -119,8 +116,6 @@ export interface Staff {
   createdAt: string;
   shipType?: string;
   shipIds?: string[];
-  paymongoSecretKey?: string;
-  paymongoPublicKey?: string;
 }
 
 export interface SystemLog {
@@ -181,6 +176,11 @@ export async function verifyOtp(email: string, token: string, type: "email" | "s
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+
+  // Clear staff session keys so an admin/scanner logout also revokes access.
+  sessionStorage.removeItem("adminStaff");
+  sessionStorage.removeItem("admin_type");
+  sessionStorage.removeItem("scanStaff");
 }
 
 const IPROG_API_KEY = import.meta.env.VITE_IPROG_SMS_API_KEY as string;
@@ -355,57 +355,74 @@ export async function onAuthStateChange(callback: (user: any) => void) {
 
 // ─── Staff Auth ───────────────────────────────────────────────────────────────
 
+/**
+ * The hardened path calls SECURITY DEFINER RPCs (bcrypt verified server-side).
+ * Before the migration is applied those functions don't exist yet, so we fall
+ * back to the legacy table queries. After the migration, RLS denies the legacy
+ * table access and only the RPC path works.
+ */
+function isMissingFunctionError(error: any): boolean {
+  return (
+    error?.code === "PGRST202" ||
+    /could not find the function/i.test(error?.message || "") ||
+    /function .* does not exist/i.test(error?.message || "")
+  );
+}
+
+function staffFromRpc(r: any): Staff {
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    password: "",
+    role: (r.role as StaffRole) || "scanner",
+    createdAt: r.created_at,
+    shipType: r.ship_type,
+    shipIds: r.ship_id ? String(r.ship_id).split(",").map((id: string) => id.trim()).filter(Boolean) : [],
+  };
+}
+
 export async function staffLogin(email: string, password: string): Promise<Staff | null> {
-  // 1. Fetch staff member by email only for security (keeps password out of URL)
-  const { data, error } = await supabase
-    .from("staff").select("*").eq("email", email).maybeSingle();
-  
-  // 2. Verify existence and handle password check locally
-  if (error || !data || data.password !== password) return null;
-  
-  const baseStaff = dbToStaff(data);
-  
-  // 2. Safely try to fetch keys (separately to avoid crashes if table doesn't exist)
-  try {
-    const { data: keys } = await supabase
-      .from("admin_keys").select("*").eq("admin_id", data.id).maybeSingle();
-    
-    if (keys) {
-      baseStaff.paymongoSecretKey = await decryptData(keys.paymongo_secret);
-      baseStaff.paymongoPublicKey = await decryptData(keys.paymongo_public);
-    }
-  } catch (e) {
-    console.warn("Could not load admin keys (table might be missing):", e);
+  // 1. Prefer the server-side RPC (bcrypt verify, no password leaves the DB).
+  const { data, error } = await supabase.rpc("staff_login", {
+    p_email: email,
+    p_password: password,
+  });
+
+  if (!error) {
+    if (!data) return null;
+    return staffFromRpc(data);
   }
-  
-  return baseStaff;
+
+  if (!isMissingFunctionError(error)) {
+    console.error("staff_login RPC failed:", error);
+    return null;
+  }
+
+  // 2. Legacy fallback (pre-migration): verify locally as before.
+  const { data: legacy, error: legacyError } = await supabase
+    .from("staff").select("*").eq("email", email).maybeSingle();
+  if (legacyError || !legacy || legacy.password !== password) return null;
+  return dbToStaff(legacy);
 }
 
 export async function getStaffList(shipType?: string): Promise<Staff[]> {
+  // Prefer the RPC which never exposes password material.
+  const { data, error } = await supabase.rpc("staff_list");
+
+  if (!error) {
+    const list = (Array.isArray(data) ? data : []).map(staffFromRpc);
+    return shipType ? list.filter((s) => s.shipType === shipType) : list;
+  }
+
+  if (!isMissingFunctionError(error)) throw error;
+
+  // Legacy fallback (pre-migration).
   let query = supabase.from("staff").select("*").order("created_at", { ascending: false });
   if (shipType) query = (query as any).eq("ship_type", shipType);
-  const { data, error } = await query;
-  if (error) throw error;
-  
-  const staffList = data.map(dbToStaff);
-  
-  // Safely try to populate keys
-  try {
-    const { data: allKeys } = await supabase.from("admin_keys").select("*");
-    if (allKeys) {
-      for (const s of staffList) {
-        const k = allKeys.find(ak => ak.admin_id === s.id);
-        if (k) {
-          s.paymongoSecretKey = await decryptData(k.paymongo_secret);
-          s.paymongoPublicKey = await decryptData(k.paymongo_public);
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("Admin keys could not be loaded separately:", e);
-  }
-  
-  return staffList;
+  const { data: legacyData, error: legacyError } = await query;
+  if (legacyError) throw legacyError;
+  return legacyData.map(dbToStaff);
 }
 
 function dbToStaff(s: any): Staff {
@@ -423,73 +440,78 @@ function dbToStaff(s: any): Staff {
 
 export async function addStaff(
   name: string, email: string, password: string, 
-  shipType: string = "ferry", shipIds?: string[], role: StaffRole = "scanner",
-  paymongoSecret?: string, paymongoPublic?: string
+  shipType: string = "ferry", shipIds?: string[], role: StaffRole = "scanner"
 ): Promise<void> {
-  const { data: newStaff, error } = await supabase.from("staff").insert({
-    name, email, password, role, ship_type: shipType, ship_id: shipIds?.join(",") || null
-  }).select().single();
-  
-  if (error) throw error;
+  // Prefer the RPC (hashes the password server-side).
+  const { error } = await supabase.rpc("staff_create", {
+    p_name: name,
+    p_email: email,
+    p_password: password,
+    p_ship_type: shipType,
+    p_ship_ids: shipIds && shipIds.length > 0 ? shipIds : null,
+    p_role: role,
+  });
 
-  // Insert keys if provided (for Admin)
-  if (newStaff && (paymongoSecret || paymongoPublic)) {
-    const encryptedSecret = paymongoSecret ? await encryptData(paymongoSecret) : "";
-    const encryptedPublic = paymongoPublic ? await encryptData(paymongoPublic) : "";
-    
-    const { error: keyError } = await supabase.from("admin_keys").insert({
-      admin_id: newStaff.id,
-      paymongo_secret: encryptedSecret,
-      paymongo_public: encryptedPublic
+  if (error && !isMissingFunctionError(error)) throw error;
+
+  if (error) {
+    // Legacy fallback (pre-migration).
+    const { error: legacyError } = await supabase.from("staff").insert({
+      name, email, password, role, ship_type: shipType, ship_id: shipIds?.join(",") || null
     });
-    
-    if (keyError) console.error("Failed to save admin keys:", keyError);
+    if (legacyError) throw legacyError;
   }
-  
+
   await addSystemLog("CREATE_STAFF", `Created ${role}: ${name} (${email})`, "System/SuperAdmin");
 }
 
 export async function updateStaffShips(staffId: string, shipIds: string[]): Promise<void> {
-  const { error } = await supabase.from("staff").update({
-    ship_id: shipIds.length > 0 ? shipIds.join(",") : null
-  }).eq("id", staffId);
-  if (error) throw error;
-  
+  const { error } = await supabase.rpc("staff_update", {
+    p_id: staffId,
+    p_name: null,
+    p_email: null,
+    p_password: null,
+    p_role: null,
+    p_ship_ids: shipIds.length > 0 ? shipIds : [],
+  });
+
+  if (error && !isMissingFunctionError(error)) throw error;
+
+  if (error) {
+    // Legacy fallback (pre-migration).
+    const { error: legacyError } = await supabase.from("staff").update({
+      ship_id: shipIds.length > 0 ? shipIds.join(",") : null
+    }).eq("id", staffId);
+    if (legacyError) throw legacyError;
+  }
+
   await addSystemLog("UPDATE_STAFF", `Assigned ships to staff ${staffId}`, "System/SuperAdmin");
 }
 
-export async function updateStaff(id: string, updates: { 
+export async function updateStaff(id: string, updates: {
   name?: string; email?: string; password?: string; role?: StaffRole;
-  paymongoSecretKey?: string; paymongoPublicKey?: string;
 }): Promise<void> {
-  const dbUpdates: any = {};
-  if (updates.name !== undefined) dbUpdates.name = updates.name;
-  if (updates.email !== undefined) dbUpdates.email = updates.email;
-  if (updates.password !== undefined) dbUpdates.password = updates.password;
-  if (updates.role !== undefined) dbUpdates.role = updates.role;
-  
-  if (Object.keys(dbUpdates).length > 0) {
-    const { error } = await supabase.from("staff").update(dbUpdates).eq("id", id);
-    if (error) throw error;
-  }
+  const { error } = await supabase.rpc("staff_update", {
+    p_id: id,
+    p_name: updates.name ?? null,
+    p_email: updates.email ?? null,
+    p_password: updates.password ?? null,
+    p_role: updates.role ?? null,
+    p_ship_ids: null,
+  });
 
-  // Update keys if provided
-  if (updates.paymongoSecretKey !== undefined || updates.paymongoPublicKey !== undefined) {
-    const encryptedSecret = updates.paymongoSecretKey ? await encryptData(updates.paymongoSecretKey) : undefined;
-    const encryptedPublic = updates.paymongoPublicKey ? await encryptData(updates.paymongoPublicKey) : undefined;
-    
-    const keyUpdates: any = {};
-    if (encryptedSecret !== undefined) keyUpdates.paymongo_secret = encryptedSecret;
-    if (encryptedPublic !== undefined) keyUpdates.paymongo_public = encryptedPublic;
-    
-    // Check if keys already exist for this admin
-    const { data: existing } = await supabase.from("admin_keys").select("id").eq("admin_id", id).maybeSingle();
-    
-    if (existing) {
-      await supabase.from("admin_keys").update(keyUpdates).eq("admin_id", id);
-    } else if (Object.keys(keyUpdates).length > 0) {
-      await supabase.from("admin_keys").insert({ admin_id: id, ...keyUpdates });
-    }
+  if (error && !isMissingFunctionError(error)) throw error;
+
+  if (error) {
+    // Legacy fallback (pre-migration).
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.password !== undefined) dbUpdates.password = updates.password;
+    if (updates.role !== undefined) dbUpdates.role = updates.role;
+
+    const { error: legacyError } = await supabase.from("staff").update(dbUpdates).eq("id", id);
+    if (legacyError) throw legacyError;
   }
 
   await addSystemLog("UPDATE_STAFF", `Updated staff details for ${updates.name || id}`, "System/SuperAdmin");
@@ -497,8 +519,15 @@ export async function updateStaff(id: string, updates: {
 
 export async function deleteStaff(id: string): Promise<void> {
   const { data: staff } = await supabase.from("staff").select("name, role").eq("id", id).maybeSingle();
-  const { error } = await supabase.from("staff").delete().eq("id", id);
-  if (error) throw error;
+
+  const { error } = await supabase.rpc("staff_delete", { p_id: id });
+  if (error && !isMissingFunctionError(error)) throw error;
+
+  if (error) {
+    // Legacy fallback (pre-migration).
+    const { error: legacyError } = await supabase.from("staff").delete().eq("id", id);
+    if (legacyError) throw legacyError;
+  }
 
   if (staff) {
     await addSystemLog("DELETE_STAFF", `Deleted ${staff.role}: ${staff.name}`, "System/SuperAdmin");
@@ -553,16 +582,25 @@ export async function getSystemLogs(): Promise<SystemLog[]> {
  * Generate seat rows for a ship based on totalSeats and totalBunks.
  * Regular seats: rows 1..R, cols A..D (4 per row, 2 aisle + 2 window)
  * Bunk pairs: each pair = 1 lower (bunk-lower) + 1 upper (bunk-upper)
- * Labels: seats → "1A","1B"... bunks → lower "A1","C1"... upper "B1","D1"...
- * Existing seats are deleted and recreated to stay in sync.
+ * Labels: seats → "1A","1B"... bunks → lower "L1","C1"... upper "U1","D1"...
+ * Uses upsert instead of delete-and-recreate so existing bookings that
+ * reference seats don't violate the FK, and admin-blocked status is preserved.
  */
 export async function generateSeatsForShip(
   shipId: string,
   totalSeats: number,
   totalBunks: number
 ): Promise<void> {
-  // Delete all existing seats for this ship first
-  await supabase.from("seats").delete().eq("ship_id", shipId);
+  // Existing seats (id + status) so blocked/status state is preserved across regen
+  const { data: existingRows } = await supabase
+    .from("seats").select("id, status").eq("ship_id", shipId);
+  const existingStatus = new Map((existingRows || []).map((r: any) => [r.id, r.status]));
+  const existingIds = new Set(existingStatus.keys());
+
+  // Seat ids currently referenced by bookings — these can never be hard-deleted
+  const { data: refRows } = await supabase
+    .from("bookings").select("seat_id").eq("ship_id", shipId).not("seat_id", "is", null);
+  const referencedIds = new Set((refRows || []).map((r: any) => r.seat_id));
 
   const rows: any[] = [];
 
@@ -573,21 +611,21 @@ export async function generateSeatsForShip(
     for (let c = 0; c < 4; c++) {
       const seatNum = (r - 1) * 4 + c + 1;
       if (seatNum > totalSeats) break;
+      const id = `${shipId}-seat-${r}-${c + 1}`;
       rows.push({
-        id: `${shipId}-seat-${r}-${c + 1}`,
+        id,
         ship_id: shipId,
         label: `${r}${colLabels[c]}`,
         type: "seat",
         row_num: r,
         col_num: c + 1,
-        status: "available",
+        status: existingStatus.get(id) || "available",
       });
     }
   }
 
   // ── Bunk beds (lower + upper pairs, 2 pairs per bunk row) ──
-  // Lower bunks: labels A1, C1, A2, C2...  cols 1,3
-  // Upper bunks: labels B1, D1, B2, D2...  cols 2,4
+  // Lower bunks: labels L1, L2...  Upper bunks: labels U1, U2...
   if (totalBunks > 0) {
     const bunkRowOffset = seatRows + 1;
     const bunkRowCount = Math.ceil(totalBunks / 2); // 2 pairs per row
@@ -597,32 +635,44 @@ export async function generateSeatsForShip(
         const pairNum = r * 2 + p + 1;
         if (pairNum > totalBunks) break;
         // Lower bunk
+        const lowerId = `${shipId}-lower-${pairNum}`;
         rows.push({
-          id: `${shipId}-lower-${pairNum}`,
+          id: lowerId,
           ship_id: shipId,
           label: `L${pairNum}`,
           type: "bunk-lower",
           row_num: rowNum,
           col_num: p * 2 + 1,
-          status: "available",
+          status: existingStatus.get(lowerId) || "available",
         });
         // Upper bunk
+        const upperId = `${shipId}-upper-${pairNum}`;
         rows.push({
-          id: `${shipId}-upper-${pairNum}`,
+          id: upperId,
           ship_id: shipId,
           label: `U${pairNum}`,
           type: "bunk-upper",
           row_num: rowNum,
           col_num: p * 2 + 2,
-          status: "available",
+          status: existingStatus.get(upperId) || "available",
         });
       }
     }
   }
 
   if (rows.length > 0) {
-    const { error } = await supabase.from("seats").insert(rows);
+    // Upsert so seats already referenced by bookings are updated in place,
+    // while brand-new seats get inserted — no FK / duplicate-PK errors.
+    const { error } = await supabase.from("seats").upsert(rows, { onConflict: "id" });
     if (error) throw error;
+  }
+
+  // Clean up stale seats that no longer fit the new layout and aren't referenced
+  const newIds = new Set(rows.map(r => r.id));
+  const staleIds = [...existingIds].filter(id => !newIds.has(id) && !referencedIds.has(id));
+  if (staleIds.length > 0) {
+    const { error: delErr } = await supabase.from("seats").delete().in("id", staleIds);
+    if (delErr) console.error("Stale seat cleanup error:", delErr);
   }
 }
 
@@ -801,11 +851,34 @@ function dbToShip(row: any): Ship {
     isConfirmed: row.is_confirmed,
     stops: row.stops, totalBunks: row.total_bunks,
     cancelled_dates: row.cancelled_dates || [],
-    paymongoSecretKey: row.paymongo_secret_key,
-    paymongoPublicKey: row.paymongo_public_key,
     requester_id: row.requester_id,
     requester_name: row.requester_name,
   };
+}
+
+// ─── Schedule helpers (weekly operation) ─────────────────────────────────────
+
+export const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function getScheduleDays(schedule?: string): string[] {
+  if (!schedule) return [...SCHEDULE_DAYS];
+  const days = schedule.split(",").map(d => d.trim()).filter(Boolean);
+  if (days.length === 0 || days.includes("daily")) return [...SCHEDULE_DAYS];
+  return days;
+}
+
+export function isDayOnSchedule(day: string, schedule?: string): boolean {
+  return getScheduleDays(schedule).includes(day);
+}
+
+export function isOperatingToday(schedule?: string): boolean {
+  return isDayOnSchedule(new Date().toLocaleDateString('en-US', { weekday: 'short' }), schedule);
+}
+
+export function formatSchedule(schedule?: string): string {
+  const days = getScheduleDays(schedule);
+  if (days.length >= SCHEDULE_DAYS.length) return "Daily";
+  return days.join(", ");
 }
 
 // ─── Stop helpers (used by LegSelector) ──────────────────────────────────────
@@ -815,6 +888,27 @@ export interface Stop {
   arrival: string;
   departure: string;
   price: number;
+  scheduleDays?: string;
+}
+
+export function getStopScheduleDays(ship: Ship, stop: Stop): string[] {
+  const raw = stop.scheduleDays?.trim();
+  if (raw) return getScheduleDays(raw);
+  return [...SCHEDULE_DAYS];
+}
+
+export function getLegScheduleDays(ship: Ship, boardStop: string, alightStop: string): string[] {
+  const stops = getShipStops(ship);
+  const board = stops.find(s => s.location === boardStop);
+  const alight = stops.find(s => s.location === alightStop);
+  const boardDays = board ? getStopScheduleDays(ship, board) : [...SCHEDULE_DAYS];
+  const alightDays = alight ? getStopScheduleDays(ship, alight) : [...SCHEDULE_DAYS];
+  return boardDays.filter(d => alightDays.includes(d));
+}
+
+export function isLegOperating(ship: Ship, boardStop: string, alightStop: string, dateStr: string): boolean {
+  const day = new Date(dateStr + "T00:00:00").toLocaleDateString('en-US', { weekday: 'short' });
+  return getLegScheduleDays(ship, boardStop, alightStop).includes(day);
 }
 
 export function getShipStops(ship: Ship): Stop[] {
@@ -943,7 +1037,7 @@ export async function expireStalePendingBookings(): Promise<number> {
   try {
     const { data, error } = await supabase
       .from("bookings")
-      .select("id, status, created_at, id_verified_at, counter_deadline")
+      .select("id, status, created_at, id_verified_at, counter_deadline, id_verification_status")
       .in("status", ["pending", "counter"]);
     if (error) throw error;
 
@@ -952,6 +1046,9 @@ export async function expireStalePendingBookings(): Promise<number> {
         if (b.status === "counter") {
           return getCounterDeadline({ counterDeadline: b.counter_deadline, createdAt: b.created_at }).getTime() <= Date.now();
         }
+        // Discount bookings awaiting ID verification aren't payable yet — their
+        // payment window starts when the admin approves (id_verified_at).
+        if (b.id_verification_status === "pending") return false;
         return getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now();
       })
       .map((b: any) => b.id);
@@ -996,7 +1093,7 @@ export async function getSeatsForShipAndDate(
   // This ensures that reservations correctly 'mark' or hold the seat.
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select("seat_id, board_stop, alight_stop, status, created_at, id_verified_at, counter_deadline")
+    .select("seat_id, board_stop, alight_stop, status, created_at, id_verified_at, counter_deadline, id_verification_status")
     .eq("ship_id", shipId)
     .eq("trip_date", tripDate)
     .in("status", ["paid", "boarded", "pending", "counter"]);
@@ -1014,8 +1111,9 @@ export async function getSeatsForShipAndDate(
     const newEnd = alightStop ? stopMap.get(alightStop) : undefined;
 
     for (const b of bookingData) {
-      // A pending booking past its payment window does NOT hold the seat.
-      if (b.status === "pending" && getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now()) {
+      // A pending booking past its payment window does NOT hold the seat —
+      // unless it's still awaiting ID verification (window starts at approval).
+      if (b.status === "pending" && b.id_verification_status !== "pending" && getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now()) {
         continue;
       }
       // A counter booking past its counter deadline does NOT hold the seat either.
@@ -1110,6 +1208,27 @@ export async function getBookingByQrCode(qrCode: string): Promise<Booking | null
   const { data, error } = await supabase.from("bookings").select("*").eq("qr_code", qrCode).single();
   if (error) return null;
   return dbToBooking(data);
+}
+
+/**
+ * Find the OTHER members of a group booking. Group members are saved at the
+ * same instant (same created_at) for the same ship + trip date, so scanning one
+ * reservation's QR lets staff confirm the whole group at once.
+ * Returns raw DB rows (snake_case), excluding the given booking, status counter.
+ */
+export async function getBookingSiblings(booking: { id: string; shipId?: string; tripDate?: string; createdAt?: string }): Promise<any[]> {
+  if (!booking.shipId || !booking.tripDate || !booking.createdAt) return [];
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("ship_id", booking.shipId)
+    .eq("trip_date", booking.tripDate)
+    .eq("created_at", booking.createdAt)
+    .eq("status", "counter")
+    .neq("id", booking.id)
+    .order("seat_label", { ascending: true });
+  if (error) return [];
+  return data || [];
 }
 
 export function dbToBooking(row: any): Booking {
@@ -1237,18 +1356,26 @@ function dbToScanRecord(row: any): ScanRecord {
 // ─── Identity Verification ────────────────────────────────────────────────────
 
 export async function uploadIDImage(bookingId: string, fileBlob: Blob): Promise<string> {
-  // Use a simpler path directly in the bucket
-  const fileExt = "jpg";
-  const fileName = `${bookingId}_${Date.now()}.${fileExt}`;
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowed.includes(fileBlob.type)) {
+    throw new Error("Unsupported file type. Please upload a JPG, PNG, or WebP image.");
+  }
+  if (fileBlob.size > 5 * 1024 * 1024) {
+    throw new Error("Image is too large. Please upload a file under 5MB.");
+  }
+
+  const ext = fileBlob.type === "image/png" ? "png" : fileBlob.type === "image/webp" ? "webp" : "jpg";
+  // Unguessable random object key so ID images can't be enumerated by booking id.
+  const fileName = `${crypto.randomUUID().replace(/-/g, "")}_${Date.now()}.${ext}`;
 
   console.log(`[Storage] Attempting upload to bucket 'id-verifications' with name: ${fileName}`);
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from("id-verifications")
     .upload(fileName, fileBlob, { 
-      contentType: "image/jpeg",
+      contentType: fileBlob.type,
       cacheControl: "3600",
-      upsert: true
+      upsert: false
     });
 
   if (uploadError) {
@@ -1371,7 +1498,8 @@ export async function archiveManifestForDate(
 
   // Remove those bookings from active bookings
   const ids = bookings.map((b) => b.id);
-  await supabase.from("bookings").delete().in("id", ids);
+  const { error: deleteError } = await supabase.from("bookings").delete().in("id", ids);
+  if (deleteError) throw deleteError;
   return true;
 }
 
@@ -1379,7 +1507,7 @@ export async function archiveManifestForDate(
  * Auto-archive manifests for past dates (yesterday and earlier).
  */
 export async function autoArchivePastManifests(ships: Ship[]): Promise<void> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = getLocalDate();
   for (const ship of ships) {
     // Get distinct trip dates for this ship that are before today
     const { data } = await supabase.from("bookings").select("trip_date")
@@ -1407,7 +1535,7 @@ export function getTodayDate(): string {
  * Uses local time to compare against stop's departure.
  */
 export function isStopDeparted(stop: Stop, tripDate: string): boolean {
-  if (!stop.departure) return false;
+  if (!stop || !stop.departure) return false;
   
   const now = new Date();
   const todayStr = getLocalDate();
@@ -1417,9 +1545,10 @@ export function isStopDeparted(stop: Stop, tripDate: string): boolean {
   // If the trip was in the past, it's already departed
   if (tripDate < todayStr) return true;
   
-  // Same day: parse the departure time (e.g., "08:00 AM")
+  // Same day: parse the departure time (e.g., "08:00 AM" or "08:00 am")
   try {
-    const [time, period] = stop.departure.split(" ");
+    const [time, periodRaw] = stop.departure.trim().split(/\s+/);
+    const period = (periodRaw || "").toUpperCase();
     const [hours, minutes] = time.split(":").map(Number);
     let h = hours;
     if (period === "PM" && h !== 12) h += 12;

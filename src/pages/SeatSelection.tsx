@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, getCurrentUser } from "@/lib/store";
+import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser } from "@/lib/store";
 import { ArrowLeft, Loader2, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
 import BiometricScanner from "@/components/BiometricScanner";
 
@@ -87,6 +87,10 @@ const SeatSelection = () => {
   // Seat Type memory
   const [seatTypeChoice, setSeatTypeChoice] = useState<"seat" | "bunk" | null>((location.state as any)?.accommodationType || null);
 
+  // Group bookings already persisted this session — cancelled if the user backs
+  // out and re-does the passenger step, so we don't orphan seats.
+  const persistedBookingIdsRef = useRef<Set<string>>(new Set());
+
   const { 
     tripDate: _tripDate, 
     boardStop: initBoard, 
@@ -136,6 +140,19 @@ const SeatSelection = () => {
 
   useEffect(() => {
     if (step === "passenger") {
+      // Cancel any bookings saved during a previous pass through this step so
+      // their seats aren't held forever by unreachable orphaned rows.
+      const staleIds = [...persistedBookingIdsRef.current];
+      if (staleIds.length > 0) {
+        persistedBookingIdsRef.current = new Set();
+        staleIds.forEach(async (id) => {
+          try {
+            await deleteBooking(id);
+          } catch (err) {
+            console.error("Failed to cancel stale group booking:", id, err);
+          }
+        });
+      }
       const selectedSeatsList = seats.filter(s => selectedSeatIds.includes(s.id));
       const initialPassengers = selectedSeatsList.map((seat, index) => {
         const type = routeGroups[index] || "regular";
@@ -423,7 +440,7 @@ const SeatSelection = () => {
                       <p className="text-3xl font-extrabold text-white">
                         ₱{passengers.reduce((sum, p) => {
                           const base = currentLegPrice || ship.price;
-                          const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.32;
+                          const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.2;
                           return sum + (base - Math.round(base * discount));
                         }, 0).toFixed(2)}
                       </p>
@@ -438,7 +455,7 @@ const SeatSelection = () => {
                         // Immediate save all bookings to lock their seats
                         const groupTimestamp = new Date().toISOString();
                         const savePromises = passengers.map(p => {
-                          const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.32;
+                          const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.2;
                           const deduction = Math.round(currentBase * discount);
                           const fPrice = currentBase - deduction;
 
@@ -466,13 +483,14 @@ const SeatSelection = () => {
                         });
 
                         await Promise.all(savePromises);
+                        passengers.forEach(p => persistedBookingIdsRef.current.add(p.bookingId));
 
                         // Navigate to review page passing group details
                         navigate(`/review/${ship.id}/group`, {
                           state: {
                             isGroup: true,
                             passengers: passengers.map(p => {
-                              const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.32;
+                              const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.2;
                               const deduction = Math.round(currentBase * discount);
                               const fPrice = currentBase - deduction;
                               return {
@@ -536,8 +554,8 @@ const SeatSelection = () => {
                     {[
                       { id: "Regular", label: "Regular", discount: 0 },
                       { id: "Student", label: "Student", discount: 0.2 },
-                      { id: "Senior", label: "Senior", discount: 0.32 },
-                      { id: "PWD", label: "PWD", discount: 0.32 },
+                      { id: "Senior", label: "Senior", discount: 0.2 },
+                      { id: "PWD", label: "PWD", discount: 0.2 },
                     ].map(pt => (
                       <button key={pt.id} onClick={() => {
                         if (pt.id === "Regular") {
@@ -601,7 +619,7 @@ const SeatSelection = () => {
                     <div>
                       <p className="text-[#8895A7] text-[10px] font-bold tracking-widest uppercase mb-1">Total Amount</p>
                       <p className="text-3xl font-extrabold text-white">
-                        ₱{((currentLegPrice || ship.price) - Math.round((currentLegPrice || ship.price) * (passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.32))).toFixed(2)}
+                        ₱{((currentLegPrice || ship.price) - Math.round((currentLegPrice || ship.price) * (passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.2))).toFixed(2)}
                       </p>
                     </div>
 
@@ -609,7 +627,7 @@ const SeatSelection = () => {
                       disabled={!fullName || !phone || !email || (passType !== "Regular" && !verified)}
                       onClick={async () => {
                         const currentBase = currentLegPrice || ship.price;
-                        const discount = passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.32;
+                        const discount = passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.2;
                         const deduction = Math.round(currentBase * discount);
                         const fPrice = currentBase - deduction;
                         
@@ -699,7 +717,7 @@ const SeatSelection = () => {
                 // Immediate save to lock seat and submit ID for this group member
                 const user = await getCurrentUser();
                 const currentBase = currentLegPrice || ship.price;
-                const discount = currentPassenger.type === "student" ? 0.2 : currentPassenger.type === "regular" ? 0 : 0.32;
+                const discount = currentPassenger.type === "student" ? 0.2 : currentPassenger.type === "regular" ? 0 : 0.2;
                 const deduction = Math.round(currentBase * discount);
                 const fPrice = currentBase - deduction;
 
@@ -724,6 +742,8 @@ const SeatSelection = () => {
                   idVerificationStatus: "pending",
                   userId: user?.id || null
                 });
+
+                persistedBookingIdsRef.current.add(currentPassenger.bookingId);
 
               } else {
                 // REUSE existing ID if we have one to avoid "Ghost" tickets

@@ -66,6 +66,7 @@ const DigitalTicket = () => {
 
   useEffect(() => {
     if (!bookingId) return;
+    let cancelled = false;
     getBookingById(bookingId).then(async (b) => {
       if (b) { 
         setBooking(b); 
@@ -93,12 +94,13 @@ const DigitalTicket = () => {
         
         // Trigger feedback modal after 2 seconds if not already reviewed
         const alreadyReviewed = await hasReviewForBooking(bookingId);
-        if (!alreadyReviewed) {
+        if (!alreadyReviewed && !cancelled) {
           setTimeout(() => setShowFeedback(true), 2000);
         }
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     });
+    return () => { cancelled = true; setShowFeedback(false); };
   }, [bookingId]);
 
   const activeBooking = groupBookings[activeIdx] || booking;

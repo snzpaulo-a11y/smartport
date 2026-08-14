@@ -26,14 +26,14 @@ const formatTimeLeft = (deadline: Date) => {
 };
 
 const getPriceForTicket = (ticket: Booking) => {
-  if (ticket.passengerType?.toLowerCase() === 'regular') return ticket.legPrice || 0;
-  const discounts: Record<string, number> = { student: 0.20, senior: 0.32, pwd: 0.32 };
-  const rate = discounts[ticket.passengerType.toLowerCase()] || 0;
+  const isPaid = ["paid", "boarded", "counter"].includes(ticket.status);
   const basePrice = ticket.legPrice || 0;
-  if (ticket.idVerificationStatus === 'pending' || ticket.idVerificationStatus === 'verified') {
-    return basePrice - Math.round(basePrice * rate);
-  }
-  return basePrice;
+  // Once paid, legPrice already stores the final discounted amount — do not discount again.
+  if (ticket.passengerType?.toLowerCase() === 'regular' || isPaid) return basePrice;
+  const discounts: Record<string, number> = { student: 0.20, senior: 0.20, pwd: 0.20 };
+  const rate = discounts[ticket.passengerType.toLowerCase()] || 0;
+  // Unpaid discounted booking: legPrice is still the base fare, apply discount once verified.
+  return ticket.idVerificationStatus === 'verified' ? basePrice - Math.round(basePrice * rate) : basePrice;
 };
 
 const MyTickets = () => {
@@ -219,7 +219,9 @@ const MyTickets = () => {
                                 : <p className="text-amber-500 font-semibold">Action Required: Identity verification needed.</p>
                             )}
                             <p className="text-[10px] text-muted-foreground mt-2 flex items-center justify-center gap-1 font-mono">
-                              <Clock className="w-3 h-3" /> {formatTimeLeft(getPaymentDeadline(ticket))} to pay
+                              {ticket.idVerificationStatus === 'pending'
+                                ? 'Waiting for admin ID approval.'
+                                : `${formatTimeLeft(getPaymentDeadline(ticket))} to pay`}
                             </p>
                           </div>
 
@@ -235,6 +237,7 @@ const MyTickets = () => {
                                   state: { 
                                     bookingId: ticket.id, name: ticket.passengerName, phone: ticket.phone, 
                                     passengerType: ticket.passengerType, price: finalPrice, seatLabel: ticket.seatLabel,
+                                    basePrice: ticket.legPrice, deduction: Math.max(0, (ticket.legPrice || 0) - finalPrice),
                                     idVerificationStatus: ticket.idVerificationStatus,
                                     boardStop: ticket.boardStop, alightStop: ticket.alightStop, tripDate: ticket.tripDate, shipName: ticket.shipName
                                   }
@@ -256,9 +259,10 @@ const MyTickets = () => {
                                   e.stopPropagation();
                                   if (confirm("Are you sure you want to change to a Regular passenger? You will lose your discount and be required to pay the full fare.")) {
                                     try {
-                                      const discounts: Record<string, number> = { student: 0.80, senior: 0.68, pwd: 0.68 };
+                                      const discounts: Record<string, number> = { student: 0.80, senior: 0.80, pwd: 0.80 };
                                       const rate = discounts[ticket.passengerType.toLowerCase()] || 1.0;
-                                      const fullPrice = ticket.legPrice ? Math.round(ticket.legPrice / rate) : 0; 
+                                      const isPaid = ["paid", "boarded", "counter"].includes(ticket.status);
+                                      const fullPrice = ticket.legPrice ? (isPaid ? Math.round(ticket.legPrice / rate) : ticket.legPrice) : 0; 
                                       await updateBookingToRegular(ticket.id, fullPrice);
                                       setTickets(prev => prev.map(t => 
                                         t.id === ticket.id 
@@ -354,9 +358,10 @@ const MyTickets = () => {
                                           onClick={async () => {
                                             if (confirm("Are you sure you want to change this passenger to a Regular passenger? You will lose their discount and be required to pay the full fare.")) {
                                               try {
-                                                const discounts: Record<string, number> = { student: 0.80, senior: 0.68, pwd: 0.68 };
+                                                const discounts: Record<string, number> = { student: 0.80, senior: 0.80, pwd: 0.80 };
                                                 const rate = discounts[ticket.passengerType.toLowerCase()] || 1.0;
-                                                const fullPrice = ticket.legPrice ? Math.round(ticket.legPrice / rate) : 0; 
+                                                const isPaid = ["paid", "boarded", "counter"].includes(ticket.status);
+                                                const fullPrice = ticket.legPrice ? (isPaid ? Math.round(ticket.legPrice / rate) : ticket.legPrice) : 0; 
                                                 await updateBookingToRegular(ticket.id, fullPrice);
                                                 setTickets(prev => prev.map(t => 
                                                   t.id === ticket.id 

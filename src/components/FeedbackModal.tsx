@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star, X, CheckCircle2, ChevronRight, MessageSquare } from "lucide-react";
 
@@ -21,6 +21,23 @@ export default function FeedbackModal({ isOpen, onClose, onSubmit, passengerName
   const [hoverRating, setHoverRating] = useState(0);
   const [surveyData, setSurveyData] = useState<any>({});
   const [comment, setComment] = useState("");
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset the flow whenever the modal is (re)opened so stale answers never leak through.
+  useEffect(() => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    if (isOpen) {
+      setStep("rating");
+      setRating(0);
+      setHoverRating(0);
+      setSurveyData({});
+      setComment("");
+    }
+  }, [isOpen]);
+
+  useEffect(() => () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
 
   const handleNext = () => {
     if (step === "rating" && rating > 0) {
@@ -28,7 +45,7 @@ export default function FeedbackModal({ isOpen, onClose, onSubmit, passengerName
     } else if (step === "survey") {
       setStep("thanks");
       onSubmit(rating, surveyData, comment);
-      setTimeout(onClose, 2000);
+      closeTimer.current = setTimeout(onClose, 2000);
     }
   };
 

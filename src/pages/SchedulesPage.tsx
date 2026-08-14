@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getShips, Ship, getLocalDate, getShipStops, isStopDeparted, getCurrentUser } from "@/lib/store";
+import { getShips, Ship, getLocalDate, getShipStops, isStopDeparted, getCurrentUser, isOperatingToday, isLegOperating, getStopScheduleDays, formatSchedule, SCHEDULE_DAYS } from "@/lib/store";
 import { Ship as ShipIcon, Route, Calendar, Clock, ArrowRight, ChevronRight, Anchor, MapPin } from "lucide-react";
 import PassengerHeader from "@/components/PassengerHeader";
 import BottomNav from "@/components/BottomNav";
@@ -13,18 +13,18 @@ const SchedulesPage = () => {
   const today = getLocalDate();
 
   useEffect(() => {
-    getShips(true).then(data => {
-      let filtered = data.filter(s => s.isActive);
-      setShips(filtered);
-      setLoading(false);
+    getCurrentUser().then((u) => {
+      if (!u) {
+        navigate("/");
+        return;
+      }
+      getShips(true).then(data => {
+        let filtered = data.filter(s => s.isActive);
+        setShips(filtered);
+        setLoading(false);
+      });
     });
   }, [navigate]);
-
-  const isOperatingToday = (schedule?: string) => {
-    if (!schedule) return true;
-    const day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-    return schedule.split(",").map(d => d.trim()).includes(day);
-  };
 
   return (
     <div className="min-h-screen bg-[#0E151E] flex flex-col text-white font-body overflow-x-hidden pb-nav">
@@ -69,11 +69,11 @@ const SchedulesPage = () => {
                     <div className="flex items-center gap-2 mb-6 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 w-fit">
                       <Calendar className="w-3 h-3 text-[#E3000F] opacity-60" />
                       <p className="text-[10px] font-black uppercase tracking-widest text-[#8895A7]">
-                        Schedule: <span className="text-[#E3000F]">{ship.scheduleDays || "Mon-Sun"}</span>
+                        Schedule: <span className="text-[#E3000F]">{formatSchedule(ship.scheduleDays)}</span>
                       </p>
                     </div>
 
-                    <div className="flex flex-row justify-between mb-8 pb-8 border-b border-white/5">
+                    <div className="flex flex-row justify-between mb-6 pb-6 border-b border-white/5">
                       <div className="text-left space-y-2">
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3 h-3 text-[#8895A7] italic" />
@@ -89,10 +89,30 @@ const SchedulesPage = () => {
                       </div>
                     </div>
 
+                    <div className="mb-8 pb-6 border-b border-white/5 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#8895A7]">Stop Schedules</p>
+                      {getShipStops(ship).map((stop, sIdx) => {
+                        const days = getStopScheduleDays(ship, stop);
+                        const label = days.length >= SCHEDULE_DAYS.length ? "Daily" : days.join(", ");
+                        const operatingToday = isLegOperating(ship, stop.location, stop.location, today);
+                        return (
+                          <div key={sIdx} className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5">
+                            <span className="text-xs font-bold text-white">{stop.location}</span>
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${operatingToday ? "text-[#E3000F]" : "text-[#8895A7] opacity-50"}`}>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
                     {(() => {
                       const stops = getShipStops(ship);
-                      const operating = isOperatingToday(ship.scheduleDays);
-                      const departed = isStopDeparted(stops[0], today);
+                      // Full-leg check: the whole route A → … → Z must run today.
+                      const operating = stops.length >= 2
+                        ? isLegOperating(ship, stops[0].location, stops[stops.length - 1].location, today)
+                        : isOperatingToday(ship.scheduleDays);
+                      const departed = stops.length >= 1
+                        ? isStopDeparted(stops[0], today)
+                        : false;
 
                       if (ship.cancelled_dates?.includes(today)) {
                         return <button disabled className="w-full bg-red-500/10 border border-red-500/20 text-red-500 font-bold py-5 rounded-2xl text-sm cursor-not-allowed">Trip Cancelled Today</button>;

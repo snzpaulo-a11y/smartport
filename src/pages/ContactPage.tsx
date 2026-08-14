@@ -1,19 +1,52 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Globe, Share2, Anchor, Mail, Phone, MapPin } from "lucide-react";
-import { getCurrentUser } from "@/lib/store";
+import { Globe, Share2, Anchor, Mail, Phone, MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { getCurrentUser, supabase } from "@/lib/store";
 import PassengerHeader from "@/components/PassengerHeader";
 import BottomNav from "@/components/BottomNav";
 
 const ContactPage = () => {
   const navigate = useNavigate();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [statusText, setStatusText] = useState("");
 
   useEffect(() => {
     getCurrentUser().then((user) => {
       if (!user) navigate("/");
     });
   }, [navigate]);
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setStatus("error"); setStatusText("Please fill in all fields.");
+      return;
+    }
+    setSubmitting(true); setStatus("idle"); setStatusText("");
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      const { error } = await supabase.from("contact_messages").insert({
+        user_id: user?.user?.id || null,
+        name: name.trim(),
+        email: email.trim(),
+        message: message.trim(),
+      });
+      if (error) throw error;
+      setName(""); setEmail(""); setMessage("");
+      setStatus("sent"); setStatusText("Your message has been sent. We'll get back to you shortly.");
+    } catch (err: any) {
+      setStatus("error");
+      setStatusText(err?.message?.includes("does not exist")
+        ? "Message delivery is not configured yet. Please email support@smartport.ph."
+        : "Failed to send message. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0E151E] flex flex-col text-white font-body overflow-x-hidden pb-nav">
@@ -73,18 +106,25 @@ const ContactPage = () => {
                 <div className="space-y-7">
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-[#8895A7] uppercase tracking-widest ml-1">Full Name</label>
-                    <input type="text" placeholder="Enter your name" className="w-full bg-[#0E151E] border border-white/5 rounded-2xl px-8 py-5 text-sm focus:outline-none focus:border-[#E3000F]/40 transition-colors placeholder:text-white/10" />
+                    <input type="text" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-[#0E151E] border border-white/5 rounded-2xl px-8 py-5 text-sm focus:outline-none focus:border-[#E3000F]/40 transition-colors placeholder:text-white/10" />
                   </div>
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-[#8895A7] uppercase tracking-widest ml-1">Email Address</label>
-                    <input type="email" placeholder="name@example.com" className="w-full bg-[#0E151E] border border-white/5 rounded-2xl px-8 py-5 text-sm focus:outline-none focus:border-[#E3000F]/40 transition-colors placeholder:text-white/10" />
+                    <input type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#0E151E] border border-white/5 rounded-2xl px-8 py-5 text-sm focus:outline-none focus:border-[#E3000F]/40 transition-colors placeholder:text-white/10" />
                   </div>
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-[#8895A7] uppercase tracking-widest ml-1">Your Message</label>
-                    <textarea placeholder="How can we help you?" rows={4} className="w-full bg-[#0E151E] border border-white/5 rounded-2xl px-8 py-5 text-sm focus:outline-none focus:border-[#E3000F]/40 transition-colors resize-none placeholder:text-white/10" />
+                    <textarea placeholder="How can we help you?" rows={4} value={message} onChange={(e) => setMessage(e.target.value)} className="w-full bg-[#0E151E] border border-white/5 rounded-2xl px-8 py-5 text-sm focus:outline-none focus:border-[#E3000F]/40 transition-colors resize-none placeholder:text-white/10" />
                   </div>
-                  <button className="w-full bg-[#E3000F] text-[#0A1118] py-5 rounded-[1.5rem] font-black text-sm hover:bg-[#FF3B47] transition-all shadow-lg shadow-[#E3000F]/20 mt-6 uppercase tracking-widest">
-                    Submit Inquiry
+                  {status !== "idle" && (
+                    <p className={`text-xs font-bold text-center ${status === "sent" ? "text-emerald-400" : "text-[#FF3B47]"}`}>
+                      {status === "sent" && <CheckCircle2 className="w-4 h-4 inline mr-1.5 -mt-0.5" />}
+                      {statusText}
+                    </p>
+                  )}
+                  <button onClick={handleSubmit} disabled={submitting} className="w-full bg-[#E3000F] text-[#0A1118] py-5 rounded-[1.5rem] font-black text-sm hover:bg-[#FF3B47] transition-all shadow-lg shadow-[#E3000F]/20 mt-6 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin inline mr-2 -mt-0.5" /> : null}
+                    {submitting ? "Sending…" : "Submit Inquiry"}
                   </button>
                 </div>
               </div>

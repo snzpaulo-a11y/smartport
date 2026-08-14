@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { supabase, cancelShipDate } from "@/lib/store";
+import { supabase, cancelShipDate, generateSeatsForShip } from "@/lib/store";
 import {
   ArrowLeft, Plus, Pencil, Trash2, X, Save, Loader2, AlertTriangle,
   Ship as ShipIcon, Sailboat, ChevronRight, ChevronDown, Power, ShieldAlert
@@ -146,33 +146,17 @@ const ManageShips = () => {
       { location: ship.route?.split("→")[0]?.trim() || "", arrival: "", departure: ship.departure, price: 0 },
       { location: ship.route?.split("→").pop()?.trim() || "", arrival: ship.arrival, departure: "", price: ship.price },
     ];
-    setForm({ name: ship.name, type: ship.type, stops, scheduleDays: ship.schedule_days?.split(",") || ["Mon","Wed","Fri","Sun"], isActive: ship.is_active ?? true, price: ship.price, seatRows: 8, seatCols: 4, bunkRows: 2, bunkCols: 4 });
+    // Rebuild the layout controls from the ship's real capacity so saving an
+    // edit never silently resets the seat/bunk layout to defaults.
+    const totalBunks = Number(ship.total_bunks) || 0;
+    const seatTotal = Math.max(0, (Number(ship.total_seats) || 0) - totalBunks);
+    setForm({ name: ship.name, type: ship.type, stops, scheduleDays: ship.schedule_days?.split(",") || ["Mon","Wed","Fri","Sun"], isActive: ship.is_active ?? true, price: ship.price, seatRows: seatTotal > 0 ? Math.ceil(seatTotal / 4) : 8, seatCols: 4, bunkRows: totalBunks > 0 ? Math.ceil(totalBunks / 4) : 2, bunkCols: 4 });
     setError(""); setExpandedSection("basic"); setShowModal(true);
   };
 
   const buildRoute = () => form.stops.map((s) => s.location).filter(Boolean).join(" → ");
   const totalSeats = form.seatRows * form.seatCols;
   const totalBunks = form.bunkRows * form.bunkCols;
-
-  const generateSeats = (shipId: string) => {
-    const seats = [];
-    for (let r = 0; r < form.seatRows; r++) {
-      for (let c = 0; c < form.seatCols; c++) {
-        const label = `${(r * form.seatCols) + c + 1}`;
-        seats.push({ id: `${shipId}-seat-${label}`, ship_id: shipId, label, type: "seat", row_num: r, col_num: c, status: "available" });
-      }
-    }
-
-    for (let r = 0; r < form.bunkRows; r++) {
-      for (let c = 0; c < form.bunkCols; c++) {
-        const isUpper = c % 2 === 0;
-        const bunkIdx = Math.floor((r * form.bunkCols + c) / 2) + 1;
-        const label = `${isUpper ? "U" : "L"}${bunkIdx}`;
-        seats.push({ id: `${shipId}-bunk-${label}`, ship_id: shipId, label, type: isUpper ? "bunk-upper" : "bunk-lower", row_num: form.seatRows + r, col_num: c, status: "available" });
-      }
-    }
-    return seats;
-  };
 
   const handleSave = async () => {
     const firstStop = form.stops[0], lastStop = form.stops[form.stops.length - 1];
@@ -188,13 +172,19 @@ const ManageShips = () => {
       is_confirmed: editingShip ? editingShip.is_confirmed : adminRole === "super_admin",
     };
     if (editingShip) {
-      const { error: err } = await supabase.from("ships").update(shipData).eq("id", editingShip.id);
+      // Editing metadata must not reset the existing seat layout — keep the
+      // ship's real capacity on the record.
+      const { error: err } = await supabase.from("ships").update({
+        ...shipData,
+        total_seats: editingShip.total_seats,
+        total_bunks: editingShip.total_bunks,
+      }).eq("id", editingShip.id);
       if (err) { setError("Failed to update."); setSaving(false); return; }
     } else {
       const newId = `ship-${Date.now()}`;
       const { error: err } = await supabase.from("ships").insert({ id: newId, ...shipData });
       if (err) { setError("Failed to add ship."); setSaving(false); return; }
-      await supabase.from("seats").insert(generateSeats(newId));
+      await generateSeatsForShip(newId, totalSeats, totalBunks);
     }
     setSaving(false); setShowModal(false); fetchShips();
   };

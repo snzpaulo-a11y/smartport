@@ -24,12 +24,13 @@ const RoutesPage = () => {
 
       const formattedRoutes = displayShips.map(ship => {
         const stops = getShipStops(ship);
+        const routeParts = (ship.route || "").split("→");
         return {
-          from: stops[0]?.location || ship.route.split("→")[0]?.trim() || "Port A",
-          to: stops[stops.length-1]?.location || ship.route.split("→").pop()?.trim() || "Port B",
+          from: stops[0]?.location || routeParts[0]?.trim() || "Port A",
+          to: stops[stops.length-1]?.location || routeParts[routeParts.length - 1]?.trim() || "Port B",
           time: ship.departure && ship.arrival ? `${ship.departure} → ${ship.arrival}` : "In Progress",
           feature: ship.type === "ferry" ? "Fast Craft" : "Pumpboat",
-          desc: `${ship.name} provides daily crossings on the ${ship.route} navigation matrix.`,
+          desc: `${ship.name} provides daily crossings on the ${ship.route || "inter-island"} navigation matrix.`,
           shipName: ship.name
         };
       });

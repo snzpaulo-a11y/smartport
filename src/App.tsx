@@ -25,6 +25,7 @@ import AccommodationPage from "./pages/AccommodationPage";
 import { AuthGuard } from "./components/AuthGuard";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
+import PaymentResult from "./pages/PaymentResult";
 import CounterConfirmation from "./pages/CounterConfirmation";
 import PrintTicket from "./pages/PrintTicket";
 import SchedulesPage from "./pages/SchedulesPage";
@@ -52,6 +53,7 @@ const App = () => (
           <Route path="/ticket/:bookingId" element={<DigitalTicket />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/payment-failed" element={<PaymentFailed />} />
+          <Route path="/payment-result" element={<PaymentResult />} />
           <Route path="/counter-confirmation" element={<CounterConfirmation />} />
           <Route path="/print-ticket/:bookingId" element={<PrintTicket />} />
           <Route path="/my-tickets" element={<MyTickets />} />

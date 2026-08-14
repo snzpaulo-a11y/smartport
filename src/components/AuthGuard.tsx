@@ -9,6 +9,19 @@ interface AuthGuardProps {
   requireStaff?: boolean;
 }
 
+function parseStaffSession(key: string): Staff | null {
+  const raw = sessionStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.id && parsed.role) return parsed as Staff;
+    return null;
+  } catch {
+    sessionStorage.removeItem(key);
+    return null;
+  }
+}
+
 export const AuthGuard = ({ children, allowedRoles, requireStaff = true }: AuthGuardProps) => {
   const [loading, setLoading] = useState(true);
   const [authenticatedStaff, setAuthenticatedStaff] = useState<Staff | null>(null);
@@ -17,15 +30,8 @@ export const AuthGuard = ({ children, allowedRoles, requireStaff = true }: AuthG
   useEffect(() => {
     // Check for staff auth in session
     // We check both "adminStaff" and "scanStaff" for flexibility
-    const adminStaff = sessionStorage.getItem("adminStaff");
-    const scanStaff = sessionStorage.getItem("scanStaff");
-    
-    if (adminStaff) {
-      setAuthenticatedStaff(JSON.parse(adminStaff));
-    } else if (scanStaff) {
-      setAuthenticatedStaff(JSON.parse(scanStaff));
-    }
-    
+    const staff = parseStaffSession("adminStaff") || parseStaffSession("scanStaff");
+    setAuthenticatedStaff(staff);
     setLoading(false);
   }, []);
 

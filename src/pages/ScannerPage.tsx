@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { addScanRecord, updateBooking, generateId, getLocalDate } from "@/lib/store";
+import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline } from "@/lib/store";
 import {
   ScanLine, ArrowLeft, Keyboard, AlertTriangle,
   CheckCircle, XCircle, Camera, CameraOff, Loader2, ShieldAlert, X, LogOut, Users, Wallet
@@ -113,6 +113,55 @@ const ScannerPage = () => {
 
       // ── Counter (pay-at-counter) reservation: not yet paid → send to counter ──
       if (booking.status === "counter") {
+        const today = getLocalDate();
+        const ticketDate = booking.trip_date || "";
+
+        if (ticketDate && ticketDate < today) {
+          setScanResult({
+            type: "invalid",
+            message: "Sorry, this ticket is not up to date.",
+            booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label },
+          });
+          return;
+        }
+        if (ticketDate && ticketDate > today) {
+          const formattedDate = new Date(ticketDate).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+          setScanResult({
+            type: "invalid",
+            message: `Your ticket is for ${formattedDate}`,
+            booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label },
+          });
+          return;
+        }
+
+        const { data: ship } = await supabase.from("ships").select("*").eq("id", booking.ship_id).maybeSingle();
+
+        if (!isSuperAdmin && assignedShipId && booking.ship_id !== assignedShipId) {
+          setScanResult({
+            type: "invalid",
+            message: `UNAUTHORIZED: Ticket is for ${ship?.name || "another ship"}`,
+            booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label },
+          });
+          return;
+        }
+        if (!isSuperAdmin && assignedShipType && ship?.type !== assignedShipType) {
+          setScanResult({
+            type: "invalid",
+            message: `UNAUTHORIZED: This scanner is restricted to ${assignedShipType.toUpperCase()}s only!`,
+            booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label },
+          });
+          return;
+        }
+
+        if (getCounterDeadline(booking).getTime() <= Date.now()) {
+          setScanResult({
+            type: "invalid",
+            message: "Counter hold expired — seat has been released.",
+            booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label },
+          });
+          return;
+        }
+
         setScanResult({
           type: "counter",
           message: "PAY AT THE COUNTER",
@@ -176,6 +225,10 @@ const ScannerPage = () => {
       }
       const isDuplicate = booking.status === "boarded";
 
+      // Mark boarded first, then record the scan — so a failed status update
+      // never leaves a "boarded" scan record behind.
+      await updateBooking(booking.id, { status: "boarded" });
+
       await addScanRecord({
         id: generateId(), bookingId: booking.id,
         passengerName: booking.passenger_name, passengerType: booking.passenger_type,
@@ -190,8 +243,6 @@ const ScannerPage = () => {
         });
         return;
       }
-
-      await updateBooking(booking.id, { status: "boarded" });
 
       const result = {
         type: "success" as const, message: "BOARDING CONFIRMED",

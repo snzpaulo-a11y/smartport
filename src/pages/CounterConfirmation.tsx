@@ -30,6 +30,7 @@ const CounterConfirmation = () => {
 
   const [refs, setRefs] = useState<string[]>([]);
   const [deadline, setDeadline] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,16 +43,30 @@ const CounterConfirmation = () => {
 
     setRefs(refsFromState);
     setDeadline(deadlineValue);
+    setLoaded(true);
   }, []);
 
-  if (refs.length === 0) {
+  if (!loaded) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
           className="glass-card rounded-2xl p-8 text-center max-w-sm w-full">
           <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
           <p className="font-display font-bold text-foreground">Loading reservation…</p>
-          <button onClick={() => navigate("/my-tickets")} className="mt-6 btn-ocean px-6 py-3 rounded-xl font-bold text-sm">
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (refs.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+          className="glass-card rounded-2xl p-8 text-center max-w-sm w-full">
+          <CalendarClock className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+          <p className="font-display font-bold text-foreground mb-2">No Reservation Found</p>
+          <p className="text-xs text-muted-foreground mb-6">Complete a counter reservation first to see your reference number.</p>
+          <button onClick={() => navigate("/my-tickets")} className="mt-2 btn-ocean px-6 py-3 rounded-xl font-bold text-sm">
             My Tickets
           </button>
         </motion.div>

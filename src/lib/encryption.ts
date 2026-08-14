@@ -67,9 +67,11 @@ export async function encryptData(text: string): Promise<string> {
 }
 
 /**
- * Decrypts a base64 encoded string
+ * Decrypts a base64 encoded string.
+ * Returns null if the value is not valid encrypted data (so callers never
+ * silently use raw ciphertext as if it were the plain value).
  */
-export async function decryptData(encoded: string): Promise<string> {
+export async function decryptData(encoded: string): Promise<string | null> {
   if (!encoded) return "";
   // If it doesn't look like our base64 format (e.g. it's already plain text sk_test_...)
   if (!encoded.includes("==") && encoded.length < 50 && (encoded.startsWith("sk_") || encoded.startsWith("pk_"))) {
@@ -97,7 +99,7 @@ export async function decryptData(encoded: string): Promise<string> {
     
     return decoder.decode(decrypted);
   } catch (e) {
-    console.debug("Note: Decryption skipped or failed for string (might be plain text or different key):", encoded.slice(0, 5));
-    return encoded; // Return as-is if it's not our encrypted format
+    console.debug("Decryption failed for string (not valid encrypted data):", encoded.slice(0, 5));
+    return null;
   }
 }

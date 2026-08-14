@@ -1,8 +1,24 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getShipStops, calcLegPrice, Stop, isStopDeparted, getLocalDate, getNextLocalDate } from "@/lib/store";
-import { ArrowLeft, MapPin, ChevronRight, Loader2, Calendar, Clock, ChevronDown, Check, Anchor } from "lucide-react";
+import { getShipById, getShipStops, calcLegPrice, Stop, isStopDeparted, getLocalDate, getNextLocalDate, isDayOnSchedule, isOperatingToday, isLegOperating, getLegScheduleDays, getScheduleDays } from "@/lib/store";
+import { ArrowLeft, MapPin, ChevronRight, ChevronLeft, Loader2, Calendar, Clock, ChevronDown, Check, Anchor, X } from "lucide-react";
+
+const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+
+// Monday-first month grid: leading nulls, then day numbers.
+function buildCalendarMonth(year: number, month: number): (number | null)[] {
+  const lead = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < lead; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
+function fmtLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 const LegSelector = () => {
   const { shipId } = useParams<{ shipId: string }>();
@@ -28,6 +44,7 @@ const LegSelector = () => {
   const [loading, setLoading] = useState(true);
   const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
   const [reserveDate, setReserveDate] = useState(getNextLocalDate());
+  const [calView, setCalView] = useState<{ y: number; m: number } | null>(null);
   
   // Group passenger counters
   const [pwdCount, setPwdCount] = useState(0);
@@ -40,15 +57,7 @@ const LegSelector = () => {
   };
 
   const isDateOnSchedule = (dateStr: string, schedule?: string) => {
-    if (!schedule) return true;
-    const day = getDayName(dateStr);
-    return schedule.split(",").map(d => d.trim()).includes(day);
-  };
-
-  const isOperatingToday = (schedule?: string) => {
-    if (!schedule) return true;
-    const day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-    return schedule.split(",").map(d => d.trim()).includes(day);
+    return isDayOnSchedule(getDayName(dateStr), schedule);
   };
 
   useEffect(() => {
@@ -59,10 +68,9 @@ const LegSelector = () => {
       const s = getShipStops(ship);
       setStops(s);
 
-      // Default selection if not passed in state
-      if (!boardStop) {
-        const firstAvailable = s.slice(0, -1).find(st => !isStopDeparted(st, tripDate));
-        if (firstAvailable) setBoardStop(firstAvailable.location);
+      // Default selection if not passed in state — voyages always depart from the origin port
+      if (!boardStop && s.length > 0) {
+        setBoardStop(s[0].location);
       }
       if (!alightStop && s.length > 1) {
         setAlightStop(s[s.length - 1].location);
@@ -79,14 +87,15 @@ const LegSelector = () => {
 
   const price = calcLegPrice(stops, boardStop, alightStop);
 
-  // Generate all possible legs (boarding to alight combinations)
+  // All bookable legs are origin → destination (passengers only board at the origin port)
   const availableLegs: Array<{ board: string; alight: string; label: string; price: number; isDeparted: boolean }> = [];
-  for (let i = 0; i < stops.length; i++) {
-    for (let j = i + 1; j < stops.length; j++) {
-      const board = stops[i].location;
+  const originStop = stops[0];
+  if (originStop) {
+    for (let j = 1; j < stops.length; j++) {
+      const board = originStop.location;
       const alight = stops[j].location;
       const legPrice = calcLegPrice(stops, board, alight);
-      const isDeparted = isStopDeparted(stops[i], tripDate);
+      const isDeparted = isStopDeparted(originStop, tripDate);
       availableLegs.push({
         board,
         alight,
@@ -144,6 +153,15 @@ const LegSelector = () => {
     });
   };
 
+  // Reservation date validity for the selected (or default full-route) leg
+  const reserveValid = (() => {
+    if (!ship) return true;
+    const effBoard = boardStop || stops[0]?.location;
+    const effAlight = alightStop || stops[stops.length - 1]?.location;
+    if (!effBoard || !effAlight) return true;
+    return isLegOperating(ship, effBoard, effAlight, reserveDate);
+  })();
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -180,7 +198,7 @@ const LegSelector = () => {
       {/* Route map */}
       <div className="glass-card rounded-2xl p-4 mb-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Live Fleet Route</p>
+          <p className="text-xs text-foreground font-bold uppercase tracking-wider">Live Fleet Route</p>
           {stops.length > 2 && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
               <Anchor className="w-3 h-3 text-primary" />
@@ -190,56 +208,49 @@ const LegSelector = () => {
         </div>
         <div className="relative">
           {stops.map((stop, i) => {
-            const departed = isStopDeparted(stop, tripDate);
+            const isOrigin = i === 0;
+            const isBoard = boardStop === stop.location;
+            const isAlight = alightStop === stop.location;
             return (
               <button
                 key={i}
                 onClick={() => {
-                  if (!boardStop || boardStop === stop.location) {
-                    setBoardStop(stop.location);
-                    setAlightStop("");
-                  } else {
-                    const bIdx = stops.findIndex(s => s.location === boardStop);
-                    if (i > bIdx) setAlightStop(stop.location);
-                    else {
-                      setBoardStop(stop.location);
-                      setAlightStop("");
-                    }
-                  }
+                  // Boarding is only allowed at the origin port
+                  const origin = stops[0]?.location;
+                  if (!origin) return;
+                  setBoardStop(origin);
+                  setAlightStop(stop.location === origin ? "" : stop.location);
                 }}
                 className={`w-full flex items-start gap-3 p-3 rounded-xl transition-all border outline-none text-left ${
-                  boardStop === stop.location ? "bg-secondary/10 border-secondary/30 ring-1 ring-secondary/20" :
-                  alightStop === stop.location ? "bg-destructive/10 border-destructive/30 ring-1 ring-destructive/20" :
-                  departed ? "bg-white/[0.02] border-white/5 opacity-80" :
-                  "hover:bg-white/5 border-transparent cursor-pointer"
+                  isBoard ? "bg-amber-500/10 border-amber-500/30 ring-1 ring-amber-500/20" :
+                  isAlight ? "bg-red-500/10 border-red-500/30 ring-1 ring-red-500/20" :
+                  "hover:bg-black/5 border-transparent cursor-pointer"
                 }`}
               >
                 <div className="flex flex-col items-center shrink-0">
                   <div className={`w-3 h-3 rounded-full border-2 mt-1 ${
-                    departed ? "bg-muted border-muted" :
-                    boardStop === stop.location ? "bg-secondary border-secondary scale-125" :
-                    alightStop === stop.location ? "bg-destructive border-destructive scale-125" :
-                    i === 0 ? "bg-blue-400 border-blue-400" :
-                    i === stops.length - 1 ? "bg-destructive/50 border-destructive/50" :
+                    isBoard ? "bg-amber-500 border-amber-500 scale-125" :
+                    isAlight ? "bg-red-500 border-red-500 scale-125" :
+                    isOrigin ? "bg-blue-500 border-blue-500" :
+                    i === stops.length - 1 ? "bg-red-500/60 border-red-500/60" :
                     "bg-primary border-primary"
                   }`} />
-                  {i < stops.length - 1 && <div className={`w-0.5 h-8 mt-1.5 ${departed ? "bg-muted/30" : "bg-border/40"}`} />}
+                  {i < stops.length - 1 && <div className="w-0.5 h-8 mt-1.5 bg-black/10" />}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <p className={`font-bold text-sm ${
-                      departed ? "text-muted-foreground" :
-                      boardStop === stop.location ? "text-secondary" :
-                      alightStop === stop.location ? "text-destructive" :
-                      "text-white"
+                      isBoard ? "text-amber-600" :
+                      isAlight ? "text-destructive" :
+                      "text-foreground"
                     }`}>
                       {cleanStr(stop.location)}
                     </p>
-                    {departed && (
-                      <span className="text-[8px] font-bold uppercase tracking-tighter bg-white/5 px-1.5 py-0.5 rounded text-white/40">Departed</span>
+                    {isOrigin && (
+                      <span className="text-[8px] font-bold uppercase tracking-tighter bg-blue-500/10 text-blue-600 border border-blue-500/20 px-1.5 py-0.5 rounded">Boarding Point</span>
                     )}
-                    {(boardStop === stop.location || alightStop === stop.location) && (
-                      <Check className="w-3 h-3 text-secondary animate-in zoom-in" />
+                    {(isBoard || isAlight) && (
+                      <Check className={`w-3 h-3 ${isBoard ? "text-amber-600" : "text-destructive"} animate-in zoom-in`} />
                     )}
                   </div>
                   <p className="text-[11px] text-[#8895A7] mt-0.5">
@@ -249,7 +260,7 @@ const LegSelector = () => {
                   </p>
                 </div>
                 {stop.price > 0 && i > 0 && (
-                  <span className={`text-xs font-bold shrink-0 mt-1 ${departed ? "text-muted-foreground/60" : "text-primary"}`}>₱{stop.price}</span>
+                  <span className="text-xs font-bold shrink-0 mt-1 text-primary">₱{stop.price}</span>
                 )}
               </button>
             );
@@ -275,7 +286,7 @@ const LegSelector = () => {
             <option value="" disabled>Select Voyage Route</option>
             {availableLegs.map((leg) => (
               <option key={`${leg.board}-${leg.alight}`} value={`${leg.board}-${leg.alight}`}>
-                {leg.label} {leg.isDeparted ? "(Departed)" : `· ₱${leg.price}`}
+                {leg.label} · ₱{leg.price}
               </option>
             ))}
           </select>
@@ -394,7 +405,9 @@ const LegSelector = () => {
       )}
 
       {(() => {
-        const operating = isOperatingToday(ship?.scheduleDays);
+        const operating = boardStop && alightStop && ship
+          ? isLegOperating(ship, boardStop, alightStop, tripDate)
+          : isOperatingToday(ship?.scheduleDays);
         const departed = isBoardDeparted;
         const isToday = tripDate === getLocalDate();
 
@@ -427,6 +440,13 @@ const LegSelector = () => {
                   </button>
                 )}
               </>
+            ) : !operating ? (
+              <button
+                disabled
+                className="flex-1 py-4 bg-white/5 border-2 border-white/5 text-white/30 font-extrabold rounded-2xl transition-all text-lg cursor-not-allowed"
+              >
+                Off-Schedule
+              </button>
             ) : (
               <button
                 onClick={() => handleContinue("book")}
@@ -439,8 +459,8 @@ const LegSelector = () => {
 
             {/* Secondary Action: Reserve for Future */}
             <button
-              onClick={() => setIsReserveModalOpen(true)}
-              className="flex-1 py-4 bg-transparent border-2 border-white/10 hover:border-white/20 hover:bg-white/5 text-white font-extrabold rounded-2xl transition-all text-lg"
+              onClick={() => { setCalView(null); setIsReserveModalOpen(true); }}
+              className="flex-1 py-4 bg-transparent border-2 border-black/10 hover:border-black/20 hover:bg-black/5 text-foreground font-extrabold rounded-2xl transition-all text-lg"
             >
               Reserve
             </button>
@@ -463,72 +483,166 @@ const LegSelector = () => {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-sm glass-card rounded-3xl p-8 border border-white/10 shadow-2xl"
+              className="relative w-full max-w-sm glass-card rounded-3xl p-7 border border-black/10 shadow-2xl"
             >
-              <h3 className="font-display font-bold text-xl text-white mb-2 text-center">Reserve Your Trip</h3>
-              <p className="text-[#8895A7] text-xs text-center mb-8">Reservations are limited to 1 week from today.</p>
-              
-              <div className="space-y-6">
-                <div className="bg-[#351B1D] border border-white/10 rounded-2xl p-4">
-                  <label className="text-[10px] font-bold text-[#8895A7] uppercase tracking-widest mb-3 block">Selected Date</label>
-                  <input 
-                    type="date" 
-                    value={reserveDate}
-                    min={getNextLocalDate()}
-                    max={(() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 7);
-                      return d.toISOString().split('T')[0];
-                    })()}
-                    onChange={(e) => setReserveDate(e.target.value)}
-                    className={`w-full bg-transparent border-none text-white font-black text-xl focus:outline-none cursor-pointer ${!isDateOnSchedule(reserveDate, ship?.scheduleDays) ? 'text-red-400' : ''}`}
-                  />
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 mb-1">
+                <div>
+                  <h3 className="font-display font-bold text-xl text-foreground">Reserve Your Trip</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {cleanStr(boardStop)} → {cleanStr(alightStop)} · pick a sailing date
+                  </p>
                 </div>
+                <button onClick={() => setIsReserveModalOpen(false)} className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/5 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-                {/* Schedule Validation Message */}
-                {(() => {
-                  const schedule = ship?.scheduleDays;
-                  const dayName = getDayName(reserveDate);
-                  const valid = isDateOnSchedule(reserveDate, schedule);
-                  
-                  if (!valid) {
-                    return (
-                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
-                        <p className="text-[10px] font-bold text-red-400 leading-relaxed">
-                          This vessel does not operate on {dayName}. Please select a valid sailing day ({schedule}).
-                        </p>
+              {/* Calendar Grid */}
+              {(() => {
+                const today = getLocalDate();
+                const effBoard = boardStop || stops[0]?.location;
+                const effAlight = alightStop || stops[stops.length - 1]?.location;
+
+                const view = calView ?? {
+                  y: Number(reserveDate.slice(0, 4)),
+                  m: Number(reserveDate.slice(5, 7)) - 1,
+                };
+                const now = new Date();
+                const canPrev = view.y > now.getFullYear() || (view.y === now.getFullYear() && view.m > now.getMonth());
+                const maxView = new Date(now.getFullYear(), now.getMonth() + 12, 1);
+                const canNext = view.y < maxView.getFullYear() || (view.y === maxView.getFullYear() && view.m < maxView.getMonth());
+                const monthTitle = new Date(view.y, view.m, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                const cells = buildCalendarMonth(view.y, view.m);
+
+                const isEnabled = (dateStr: string) => {
+                  if (dateStr < today) return false;
+                  return ship && effBoard && effAlight
+                    ? isLegOperating(ship, effBoard, effAlight, dateStr)
+                    : isDayOnSchedule(getDayName(dateStr), ship?.scheduleDays);
+                };
+
+                const selectedLabel = new Date(`${reserveDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+                return (
+                  <div className="mt-6 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-primary" />
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Sailing Calendar</p>
                       </div>
-                    );
-                  }
-                  
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setCalView({ y: view.y, m: view.m - 1 })}
+                          disabled={!canPrev}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-black/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-bold text-foreground min-w-[110px] text-center">{monthTitle}</span>
+                        <button
+                          onClick={() => setCalView({ y: view.y, m: view.m + 1 })}
+                          disabled={!canNext}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-black/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {WEEKDAY_LABELS.map((w, i) => (
+                        <div key={i} className="h-6 flex items-center justify-center text-[9px] font-bold text-muted-foreground uppercase">{w}</div>
+                      ))}
+                      {cells.map((dayNum, i) => {
+                        if (dayNum === null) return <div key={`blank-${i}`} />;
+                        const dateStr = fmtLocal(new Date(view.y, view.m, dayNum));
+                        const enabled = isEnabled(dateStr);
+                        const selected = dateStr === reserveDate;
+                        const isToday = dateStr === today;
+                        return (
+                          <button
+                            key={dateStr}
+                            disabled={!enabled}
+                            onClick={() => setReserveDate(dateStr)}
+                            className={`h-10 rounded-xl text-sm font-bold transition-all ${
+                              selected
+                                ? "bg-primary text-white shadow-lg shadow-primary/25 scale-105"
+                                : enabled
+                                  ? "text-foreground hover:bg-primary/10 cursor-pointer"
+                                  : "text-muted-foreground/40 cursor-not-allowed"
+                            } ${isToday && !selected ? "ring-1 ring-primary/50" : ""}`}
+                          >
+                            {dayNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-1.5 mt-3 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                      <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" /> Selected
+                      <span className="text-primary normal-case tracking-normal text-[10px]">{selectedLabel}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Legend */}
+              <div className="flex items-center justify-between mb-5 px-1">
+                <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" /> Available
+                </div>
+                <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                  <span className="w-2.5 h-2.5 rounded-full bg-black/10 inline-block" /> No Sailing / Past
+                </div>
+              </div>
+
+              {/* Schedule Validation Message */}
+              {(() => {
+                const effBoard = boardStop || stops[0]?.location;
+                const effAlight = alightStop || stops[stops.length - 1]?.location;
+                const legDays = ship && effBoard && effAlight ? getLegScheduleDays(ship, effBoard, effAlight) : getScheduleDays(ship?.scheduleDays);
+                const scheduleLabel = legDays.length >= 7 ? "Daily" : legDays.join(", ");
+                const dayName = getDayName(reserveDate);
+
+                if (!reserveValid) {
                   return (
-                    <div className="px-1">
-                      <p className="text-[9px] font-bold text-[#8895A7] uppercase tracking-widest opacity-60">
-                         Operational Days: <span className="text-secondary">{schedule || "Daily"}</span>
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                      <p className="text-[10px] font-bold text-red-500 leading-relaxed">
+                        {dayName} has no sailing. Pick an operational day ({scheduleLabel}).
                       </p>
                     </div>
                   );
-                })()}
+                }
 
-                <div className="flex flex-col gap-3">
-                  <button
-                    disabled={!isDateOnSchedule(reserveDate, ship?.scheduleDays)}
-                    onClick={() => {
-                      setIsReserveModalOpen(false);
-                      handleContinue("reserve", reserveDate);
-                    }}
-                    className="w-full py-4 bg-[#E3000F] disabled:bg-white/5 disabled:text-white/20 disabled:shadow-none text-black font-black rounded-2xl shadow-lg shadow-[#E3000F]/20 transition-all font-display"
-                  >
-                    Confirm & Proceed
-                  </button>
-                  <button
-                    onClick={() => setIsReserveModalOpen(false)}
-                    className="w-full py-4 bg-white/5 text-white font-bold rounded-2xl"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                return (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                    <p className="text-[10px] font-bold text-emerald-600 leading-relaxed">
+                      {dayName} is available. This leg sails on {scheduleLabel}.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              <div className="flex flex-col gap-3 mt-5">
+                <button
+                  disabled={!reserveValid}
+                  onClick={() => {
+                    setIsReserveModalOpen(false);
+                    handleContinue("reserve", reserveDate);
+                  }}
+                  className="w-full py-4 bg-[#E3000F] text-white disabled:bg-black/10 disabled:text-muted-foreground disabled:shadow-none font-black rounded-2xl shadow-lg shadow-[#E3000F]/20 transition-all font-display flex items-center justify-center gap-2"
+                >
+                  Confirm & Proceed <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setIsReserveModalOpen(false)}
+                  className="w-full py-3 bg-black/5 text-foreground font-bold rounded-2xl"
+                >
+                  Cancel
+                </button>
               </div>
             </motion.div>
           </div>

@@ -47,60 +47,42 @@ const PaymentSuccess = () => {
       return () => clearTimeout(nextTimer);
     }
 
-    // Process payment with PayMongo if source exists
+    // Confirm the booking as paid. The payment itself is verified on the
+    // PayMongo side (checkout session); here we only mark the booking paid for
+    // the owner. No secret key ever reaches the browser.
     const processPayment = async () => {
       try {
-        const sourceId = sessionStorage.getItem("pending_source_id");
-        const amountStr = sessionStorage.getItem("pending_amount");
-        const SECRET_KEY = import.meta.env.VITE_PAYMONGO_SECRET_KEY as string;
-
-        if (sourceId && amountStr && SECRET_KEY) {
-          const authHeader = `Basic ${btoa(SECRET_KEY + ":")}`;
-          const payRes = await fetch("https://api.paymongo.com/v1/payments", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: authHeader,
-            },
-            body: JSON.stringify({
-              data: {
-                attributes: {
-                  amount: parseInt(amountStr, 10),
-                  currency: "PHP",
-                  description: `SmartPort Booking ${bookingId}`,
-                  source: {
-                    id: sourceId,
-                    type: "source",
-                  },
-                },
-              },
-            }),
-          });
-
-          if (!payRes.ok) {
-            const payErr = await payRes.json();
-            console.error("PayMongo payment creation error:", payErr);
-          } else {
-            console.log("PayMongo payment successfully recorded!");
-          }
-
-          sessionStorage.removeItem("pending_source_id");
-          sessionStorage.removeItem("pending_amount");
-        }
-
         const isGroup = sessionStorage.getItem("pending_is_group") === "true";
         const bookingIdsStr = sessionStorage.getItem("pending_booking_ids");
 
+        // Only the passenger who owns the booking may mark it paid.
+        const { data: user } = await supabase.auth.getUser();
+        const currentUid = user?.user?.id;
+
+        const canMarkPaid = async (id: string) => {
+          const { data: b } = await supabase.from("bookings").select("user_id, status").eq("id", id).single();
+          if (!b) return false;
+          if (b.status === "paid" || b.status === "boarded" || b.status === "counter") return true;
+          if (currentUid && b.user_id && b.user_id !== currentUid) return false;
+          return true;
+        };
+
         if (isGroup && bookingIdsStr) {
           const ids = bookingIdsStr.split(",");
-          const { error } = await supabase.from("bookings").update({ status: "paid" }).in("id", ids);
+          const allowed: string[] = [];
+          for (const id of ids) {
+            if (await canMarkPaid(id)) allowed.push(id);
+          }
+          if (allowed.length === 0) throw new Error("Not authorized to confirm this booking.");
+
+          const { error } = await supabase.from("bookings").update({ status: "paid" }).in("id", allowed);
           if (error) throw error;
 
-          const booking = await getBookingById(ids[0]);
+          const booking = await getBookingById(allowed[0]);
           if (booking) setPassengerName(booking.passengerName + " & Group");
 
           // Cache group bookings mapping in localStorage so it persists even on page refresh
-          localStorage.setItem(`group_bookings_${ids[0]}`, JSON.stringify(ids));
+          localStorage.setItem(`group_bookings_${allowed[0]}`, JSON.stringify(allowed));
 
           sessionStorage.removeItem("pending_booking_ids");
           sessionStorage.removeItem("pending_is_group");
@@ -109,9 +91,11 @@ const PaymentSuccess = () => {
           setStatus("confirmed");
 
           setTimeout(() => {
-            navigate(`/ticket/${ids[0]}`, { state: { isGroup: true, bookingIds: ids } });
+            navigate(`/ticket/${allowed[0]}`, { state: { isGroup: true, bookingIds: allowed } });
           }, 1500);
         } else {
+          if (!(await canMarkPaid(bookingId))) throw new Error("Not authorized to confirm this booking.");
+
           // Mark online booking as paid in Supabase
           const { error } = await supabase.from("bookings").update({ status: "paid" }).eq("id", bookingId);
           if (error) throw error;

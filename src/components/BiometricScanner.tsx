@@ -160,7 +160,7 @@ export default function BiometricScanner({ isOpen, onClose, onSuccess }: Props) 
                 {error ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
                     <p className="text-red-500 font-bold mb-4">{error}</p>
-                    <button onClick={onClose} className="px-6 py-2 bg-white/10 rounded-xl text-xs">Go Back</button>
+                    <button onClick={() => { stopCamera(); setError(""); setStep("choose"); }} className="px-6 py-2 bg-white/10 rounded-xl text-xs">Try Again</button>
                   </div>
                 ) : (
                   <>

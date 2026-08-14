@@ -92,6 +92,12 @@ const TicketReview = () => {
     return words.filter((w, i) => w !== words[i - 1]).join(" ");
   };
 
+  // Show the base fare until a discount ID is actually verified by admin.
+  const isUnverifiedDiscount = passengerType !== "regular" && idVerificationStatus !== "verified";
+  const singleDisplayPrice = isUnverifiedDiscount ? (basePrice || price) : price;
+  const groupDisplayPrice = passengers.reduce((sum, p) =>
+    sum + (p.type !== "regular" && p.idVerificationStatus !== "verified" ? (p.basePrice || p.price) : p.price), 0);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-body pb-24">
       {/* ── Top Header ── */}
@@ -220,9 +226,7 @@ const TicketReview = () => {
             <div>
               <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase mb-1">Total Amount</p>
               <p className="text-[40px] leading-none font-extrabold text-slate-900 tracking-tight">
-                ₱{isGroup 
-                  ? passengers.reduce((sum, p) => sum + p.price, 0).toFixed(2) 
-                  : price.toFixed(2)}
+                ₱{(isGroup ? groupDisplayPrice : singleDisplayPrice).toFixed(2)}
               </p>
             </div>
             <div className="text-right">

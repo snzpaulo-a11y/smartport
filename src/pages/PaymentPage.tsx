@@ -5,49 +5,31 @@ import { saveBooking, generateId, getLocalDate, getCurrentUser, supabase, getShi
 import { ArrowLeft, Loader2, AlertCircle, Shield } from "lucide-react";
 import { useEffect } from "react";
 
-const SECRET_KEY = import.meta.env.VITE_PAYMONGO_SECRET_KEY as string;
-const BASE64_KEY = btoa(SECRET_KEY + ":");
-
-async function createPayMongoSource(
+// Payment sessions are created by the server-side Edge Function
+// (supabase/functions/create-paymongo-source) so the PayMongo secret key never
+// ships in the browser bundle.
+async function createPayMongoCheckout(
   amountCentavos: number,
-  type: "gcash" | "paymaya",
   bookingId: string,
-  passengerName: string,
-  passengerEmail: string,
-  passengerPhone: string
+  passengerName: string
 ) {
-  const origin = window.location.origin;
-  const res = await fetch("https://api.paymongo.com/v1/sources", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${BASE64_KEY}`,
+  const res = await supabase.functions.invoke("create-paymongo-source", {
+    body: {
+      amount: amountCentavos,
+      description: `SmartPort Booking ${bookingId} — ${passengerName}`,
+      bookingId,
     },
-    body: JSON.stringify({
-      data: {
-        attributes: {
-          amount: amountCentavos,
-          currency: "PHP",
-          type,
-          redirect: {
-            success: `${origin}/payment-success?booking_id=${bookingId}`,
-            failed:  `${origin}/payment-failed?booking_id=${bookingId}`,
-          },
-          billing: {
-            name: passengerName,
-            email: passengerEmail,
-            phone: passengerPhone,
-          },
-        },
-      },
-    }),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err?.errors?.[0]?.detail || "Failed to create payment source.");
+
+  if (res.error) {
+    const detail = (res.error as any)?.message || "Failed to create payment session.";
+    throw new Error(detail);
   }
-  const data = await res.json();
-  return data.data;
+  const session = res.data?.data;
+  if (!session?.attributes?.checkout_url) {
+    throw new Error("Payment session could not be created. Please try the counter option.");
+  }
+  return session;
 }
 
 const PaymentPage = () => {
@@ -133,7 +115,7 @@ const PaymentPage = () => {
     if (stateDeduction && stateDeduction > 0) return stateDeduction;
     if (!passengerType) return 0;
     // Fallback calculation if state is missing
-    const discounts: Record<string, number> = { student: 0.20, senior: 0.32, pwd: 0.32 };
+    const discounts: Record<string, number> = { student: 0.20, senior: 0.20, pwd: 0.20 };
     const rate = discounts[passengerType.toLowerCase()] || 0;
     return Math.round(basePrice * rate);
   };
@@ -180,7 +162,16 @@ const PaymentPage = () => {
   const isExpired = bookingStatus === "expired";
   const isLocked = !isGroup && (currentStatus === "pending" || currentStatus === "rejected" || isExpired);
 
+  // A group with discount members whose ID hasn't been verified yet must wait.
+  const hasUnverifiedDiscount = isGroup
+    ? passengers.some(p => p.type?.toLowerCase() !== "regular" && p.idVerificationStatus !== "verified")
+    : false;
+
   const handlePay = async (method: "gcash" | "paymaya") => {
+    if (hasUnverifiedDiscount) {
+      setError("Please wait for ID verification before paying.");
+      return;
+    }
     if (isLocked) {
       if (isExpired) setError("This booking has expired. Please book a new trip.");
       return; // Safety check
@@ -196,41 +187,37 @@ const PaymentPage = () => {
         await Promise.all(updatePromises);
 
         const amountCentavos = Math.round(finalPrice * 100);
-        // Create PayMongo source using the first passenger's booking details
+        // Create a PayMongo checkout session via the server-side Edge Function.
         const firstP = passengers[0];
-        const source = await createPayMongoSource(
-          amountCentavos, method, firstP.bookingId, firstP.name,
-          firstP.email || `${firstP.phone}@smartport.ph`,
-          firstP.phone
+        const session = await createPayMongoCheckout(
+          amountCentavos, firstP.bookingId, firstP.name
         );
 
         sessionStorage.setItem("pending_booking_id", firstP.bookingId);
         sessionStorage.setItem("pending_qr_code", `SPT-${firstP.bookingId}`);
-        sessionStorage.setItem("pending_source_id", source.id);
+        sessionStorage.setItem("pending_source_id", "");
         sessionStorage.setItem("pending_amount", amountCentavos.toString());
         sessionStorage.setItem("pending_is_group", "true");
         sessionStorage.setItem("pending_booking_ids", passengers.map(p => p.bookingId).join(","));
 
-        window.location.href = source.attributes.redirect.checkout_url;
+        window.location.href = session.attributes.checkout_url;
 
       } else {
         // PERSIST THE FINAL PRICE (Discounted or Regular) before paying
         await supabase.from("bookings").update({ leg_price: finalPrice }).eq("id", bookingId);
 
         const amountCentavos = Math.round(finalPrice * 100);
-        const source = await createPayMongoSource(
-          amountCentavos, method, bookingId, name,
-          email || `${phone}@smartport.ph`,
-          phone
+        const session = await createPayMongoCheckout(
+          amountCentavos, bookingId, name
         );
 
         sessionStorage.setItem("pending_booking_id", bookingId);
         sessionStorage.setItem("pending_qr_code", `SPT-${bookingId}`);
-        sessionStorage.setItem("pending_source_id", source.id);
+        sessionStorage.setItem("pending_source_id", "");
         sessionStorage.setItem("pending_amount", amountCentavos.toString());
         sessionStorage.setItem("pending_is_group", "false");
 
-        window.location.href = source.attributes.redirect.checkout_url;
+        window.location.href = session.attributes.checkout_url;
       }
     } catch (e: any) {
       setError(e.message || "Something went wrong. Please try again.");
@@ -239,6 +226,10 @@ const PaymentPage = () => {
   };
 
   const handlePayCounter = async () => {
+    if (hasUnverifiedDiscount) {
+      setError("Please wait for ID verification before paying.");
+      return;
+    }
     if (isExpired) {
       setError("This booking has expired. Please book a new trip.");
       return;
