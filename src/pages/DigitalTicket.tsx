@@ -243,12 +243,28 @@ const DigitalTicket = () => {
                   <CheckCircle className="w-2 h-2" /> Verified
                 </span>
               )}
+              {activeBooking.idVerificationStatus === "rejected" && (
+                <span className="flex items-center gap-1 text-[8px] font-bold text-rose-500 uppercase tracking-widest bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                  <AlertTriangle className="w-2 h-2" /> ID Rejected
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         {/* Details */}
         <div className="p-5 space-y-4">
+          {activeBooking.idVerificationStatus === "rejected" && (
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
+              <p className="text-rose-500 font-bold text-xs flex items-center justify-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" /> ID Verification Rejected
+              </p>
+              {activeBooking.idRejectedReason && (
+                <p className="text-[10px] text-rose-400/70 italic mt-1">Reason: {activeBooking.idRejectedReason}</p>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1">Your discount has been removed. You are now charged the regular fare.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-start gap-2.5">
               <User className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />

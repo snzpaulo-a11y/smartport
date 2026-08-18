@@ -144,7 +144,13 @@ export async function signUp(email: string, password: string, name: string) {
   const { data, error } = await supabase.auth.signUp({
     email, password, options: { data: { full_name: name } },
   });
-  if (error) throw error;
+  if (error) {
+    // If Supabase already has this email (e.g. from a prior attempt), try signing in instead.
+    if (error.message?.includes("already registered") || error.message?.includes("already been registered")) {
+      return { fallbackSignIn: true } as any;
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -261,18 +267,25 @@ const EMAILJS_ID_REJECTION_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_ID_REJECTI
 
 export async function sendEmailjsIDStatus(email: string, name: string, status: "verified" | "rejected", reason?: string) {
   try {
-    const templateId = status === "verified"
-      ? (EMAILJS_ID_APPROVAL_TEMPLATE_ID || "template_qsk2kt8")
-      : EMAILJS_ID_REJECTION_TEMPLATE_ID;
+    const isRejected = status === "rejected";
+    const templateId = isRejected
+      ? (EMAILJS_ID_REJECTION_TEMPLATE_ID || "template_pff85wj")
+      : (EMAILJS_ID_APPROVAL_TEMPLATE_ID || "template_d4wzqd8");
+    const serviceId = isRejected
+      ? (import.meta.env.VITE_EMAILJS_REJECTION_SERVICE_ID as string || "service_utkg3ph")
+      : EMAILJS_SERVICE_ID;
+    const publicKey = isRejected
+      ? (import.meta.env.VITE_EMAILJS_REJECTION_PUBLIC_KEY as string || "Zn4om2AxW4hi59WUv")
+      : EMAILJS_PUBLIC_KEY;
     if (!templateId) {
       console.warn("EmailJS Template ID missing for ID status notification.");
       return false;
     }
 
     const data = {
-      service_id: EMAILJS_SERVICE_ID,
+      service_id: serviceId,
       template_id: templateId,
-      user_id: EMAILJS_PUBLIC_KEY,
+      user_id: publicKey,
       template_params: {
           'to_email': email,
           'email': email,
@@ -1235,7 +1248,7 @@ export function dbToBooking(row: any): Booking {
   return {
     id: row.id, shipId: row.ship_id, seatId: row.seat_id, seatLabel: row.seat_label,
     passengerName: row.passenger_name, passengerType: row.passenger_type,
-    phone: row.phone, status: row.status, qrCode: row.qr_code,
+    phone: row.phone, email: row.email || undefined, status: row.status, qrCode: row.qr_code,
     createdAt: row.created_at, userId: row.user_id,
     counterDeadline: row.counter_deadline || undefined,
     accommodationType: row.accommodation_type,
@@ -1271,6 +1284,7 @@ export async function saveBooking(booking: Booking): Promise<void> {
     passenger_name: booking.passengerName,
     passenger_type: booking.passengerType,
     phone: booking.phone,
+    email: booking.email || null,
     status: booking.status,
     qr_code: booking.qrCode,
     created_at: booking.createdAt,
@@ -1406,6 +1420,11 @@ export async function updateIDVerificationStatus(
     id_rejected_reason: reason || null
   };
 
+  // On rejection, downgrade to regular fare (remove discount).
+  if (status === "rejected") {
+    updates.passenger_type = "regular";
+  }
+
   const { error } = await supabase.from("bookings")
     .update(updates)
     .eq("id", bookingId);
@@ -1415,15 +1434,31 @@ export async function updateIDVerificationStatus(
   // Trigger EmailJS Notification (Async)
   const { data: booking } = await supabase.from("bookings").select("passenger_name, phone, user_id, email").eq("id", bookingId).single();
   if (booking) {
-    // Prefer the email stored on the booking itself (works with the anon key).
+    // Find the passenger's email — try multiple fallbacks.
     let email = booking.email as string | undefined;
+
+    // Fallback: look for an email on any other booking by the same user.
     if (!email && booking.user_id) {
-      // Fallback: only possible with a service role key, keep as a last resort.
+      const { data: otherBooking } = await supabase
+        .from("bookings")
+        .select("email")
+        .eq("user_id", booking.user_id)
+        .not("email", "is", null)
+        .limit(1)
+        .maybeSingle();
+      email = otherBooking?.email as string | undefined;
+    }
+
+    // Last resort: try admin API (requires service role key).
+    if (!email && booking.user_id) {
       const { data: userData } = await supabase.auth.admin.getUserById(booking.user_id).catch(() => ({ data: { user: null } }));
       email = userData?.user?.email as string | undefined;
     }
+
     if (email) {
       sendEmailjsIDStatus(email, booking.passenger_name, status, reason);
+    } else {
+      console.warn("[updateIDVerificationStatus] No email found for booking", bookingId, "— email notification skipped.");
     }
   }
 }

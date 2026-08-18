@@ -164,7 +164,7 @@ const PaymentPage = () => {
   if (!shipId || (!isGroup && !name)) return <div className="p-8 text-center text-foreground">Invalid booking data.</div>;
 
   const isExpired = bookingStatus === "expired";
-  const isLocked = !isGroup && (currentStatus === "pending" || currentStatus === "rejected" || isExpired);
+  const isLocked = !isGroup && (currentStatus === "pending" || isExpired);
 
   // A group with discount members whose ID hasn't been verified yet must wait.
   const hasUnverifiedDiscount = isGroup
@@ -392,21 +392,7 @@ const PaymentPage = () => {
                   <AlertCircle className="w-6 h-6" />
                </div>
                <h3 className="font-bold text-white mb-1">ID Verification Rejected</h3>
-               <p className="text-[10px] text-muted-foreground mb-4">Your discount ID was rejected. You can proceed at regular price or try a different ID.</p>
-               <div className="flex flex-col gap-2">
-                 <button 
-                  onClick={handleSwitchToRegular}
-                  className="w-full py-2 bg-white text-black rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-white/90 transition-all"
-                 >
-                   Switch to Regular & Pay Now
-                 </button>
-                 <button 
-                  onClick={() => navigate(-1)}
-                  className="text-[10px] text-muted-foreground hover:text-white uppercase tracking-widest"
-                 >
-                   Try Different ID
-                 </button>
-               </div>
+               <p className="text-[10px] text-muted-foreground mb-4">Your discount has been removed. You are now charged the regular fare. You can proceed to payment below.</p>
             </div>
           )}
 

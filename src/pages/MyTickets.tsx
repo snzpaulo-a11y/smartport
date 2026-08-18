@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser, getBookingsByUser, getShipById, Booking, deleteBooking, updateBookingToRegular, expireStalePendingBookings, getPaymentDeadline, getCounterDeadline } from "@/lib/store";
-import { ArrowLeft, Ticket, Loader2, Ship as ShipIcon, Calendar, MapPin, QrCode, CreditCard, Trash2, ShieldAlert, CheckCircle2, Shield, Clock, Wallet } from "lucide-react";
+import { ArrowLeft, Ticket, Loader2, Ship as ShipIcon, Calendar, MapPin, QrCode, CreditCard, Trash2, ShieldAlert, CheckCircle2, Shield, Clock, Wallet, AlertTriangle } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -205,7 +205,15 @@ const MyTickets = () => {
                               </p>
                             )}
                             {ticket.idVerificationStatus === 'rejected' && (
-                              <p className="text-rose-500 font-semibold">ID Rejected. Please cancel or change to regular fare.</p>
+                              <div className="space-y-1">
+                                <p className="text-rose-500 font-semibold flex items-center justify-center gap-1.5">
+                                  <AlertTriangle className="w-3.5 h-3.5" /> ID Verification Rejected
+                                </p>
+                                {ticket.idRejectedReason && (
+                                  <p className="text-[10px] text-rose-400/70 italic">Reason: {ticket.idRejectedReason}</p>
+                                )}
+                                <p className="text-[10px] text-muted-foreground">Your discount has been removed. Proceed at regular fare.</p>
+                              </div>
                             )}
                             {ticket.idVerificationStatus === 'verified' && (
                               <p className="text-emerald-500 font-semibold flex items-center justify-center gap-1.5">
@@ -242,14 +250,16 @@ const MyTickets = () => {
                                   }
                                 });
                               }}
-                              disabled={isPendingVerification || isRejectedVerification}
+                              disabled={isPendingVerification}
                               className={`w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                (isPendingVerification || isRejectedVerification)
+                                isPendingVerification
                                   ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50 grayscale"
-                                  : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 active:scale-[0.98] hover:scale-[1.01]"
+                                  : isRejectedVerification
+                                    ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20 active:scale-[0.98] hover:scale-[1.01]"
+                                    : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 active:scale-[0.98] hover:scale-[1.01]"
                               }`}
                             >
-                              <CreditCard className="w-4 h-4" /> Continue to Payment
+                              <CreditCard className="w-4 h-4" /> {isRejectedVerification ? "Pay Regular Fare" : "Continue to Payment"}
                             </button>
                           
                             <div className="grid grid-cols-2 gap-2">

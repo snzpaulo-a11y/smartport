@@ -217,13 +217,12 @@ export default function LoginPage() {
 
       let resetOk = false;
 
-      // Try client side native update first (in case there is a session)
+      // Try client side native update first (in case there is a session from PASSWORD_RECOVERY)
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) {
         console.warn("Native updateUser failed (no active session), trying RPC:", error.message);
 
-        // Use the SQL RPC fallback to update the password directly in database auth schema.
-        // The hardened RPC requires the issued recovery OTP (single-use, 10-min expiry).
+        // Use the SQL RPC to update the password directly in auth schema.
         const { data: rpcSuccess, error: rpcError } = await supabase.rpc("reset_user_password", {
           p_email: targetEmail,
           p_code: recoveryOtp,
@@ -232,7 +231,7 @@ export default function LoginPage() {
 
         if (rpcError || !rpcSuccess) {
           console.error("RPC reset failed:", rpcError);
-          setError("Password reset failed. The database reset function is missing — run security_hardening.sql in your Supabase SQL Editor, then try again.");
+          setError("Password reset function not available. Please ask the admin to run reset_user_password.sql in the Supabase SQL Editor.");
         } else {
           resetOk = true;
           setError("Password updated successfully! You can now log in.");
@@ -361,7 +360,7 @@ export default function LoginPage() {
             authIdentifier = `${phone.replace(/\D/g, "")}@smartport.ph`;
           }
 
-          await signUp(authIdentifier, signupPassword, name);
+          const signUpResult = await signUp(authIdentifier, signupPassword, name);
 
           // Sign in automatically after verification
           await signIn(authIdentifier, signupPassword);
