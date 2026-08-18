@@ -32,8 +32,7 @@ const getPriceForTicket = (ticket: Booking) => {
   if (ticket.passengerType?.toLowerCase() === 'regular' || isPaid) return basePrice;
   const discounts: Record<string, number> = { student: 0.20, senior: 0.20, pwd: 0.20 };
   const rate = discounts[ticket.passengerType.toLowerCase()] || 0;
-  // Unpaid discounted booking: legPrice is still the base fare, apply discount once verified.
-  return ticket.idVerificationStatus === 'verified' ? basePrice - Math.round(basePrice * rate) : basePrice;
+  return basePrice - Math.round(basePrice * rate);
 };
 
 const MyTickets = () => {
@@ -307,6 +306,8 @@ const MyTickets = () => {
                       const hasUnverifiedDiscount = pendingOrRejectedTickets.some(t => t.idVerificationStatus === 'pending');
                       const hasRejectedDiscount = pendingOrRejectedTickets.some(t => t.idVerificationStatus === 'rejected');
                       const totalGroupPrice = groupTickets.reduce((sum, t) => sum + getPriceForTicket(t), 0);
+                      const groupBaseTotal = groupTickets.reduce((sum, t) => sum + (t.legPrice || 0), 0);
+                      const hasGroupDiscount = groupBaseTotal > totalGroupPrice;
                       const payAmount = readyTickets.reduce((sum, t) => sum + getPriceForTicket(t), 0);
                       const isPaymentDisabled = readyTickets.length === 0;
 
@@ -403,7 +404,15 @@ const MyTickets = () => {
                           <div className="flex justify-between items-center text-xs text-muted-foreground mb-4">
                             <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /><span>{firstTicket.tripDate ? new Date(firstTicket.tripDate).toLocaleDateString() : 'N/A'}</span></div>
                             <div className="text-right flex flex-col items-end">
-                              <span className="text-[10px] text-muted-foreground">Total Group Fare: ₱{totalGroupPrice}</span>
+                              {hasGroupDiscount ? (
+                                <>
+                                  <span className="text-[10px] text-muted-foreground line-through">₱{groupBaseTotal}</span>
+                                  <span className="text-[10px] text-emerald-500">-{`₱${(groupBaseTotal - totalGroupPrice).toLocaleString()} discount`}</span>
+                                  <span className="text-xs font-bold text-foreground">₱{totalGroupPrice}</span>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">Total Group Fare: ₱{totalGroupPrice}</span>
+                              )}
                               {readyTickets.length < groupTickets.length && (
                                 <span className="font-bold text-emerald-500 mt-0.5">Approved to Pay: ₱{payAmount}</span>
                               )}

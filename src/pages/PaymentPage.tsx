@@ -125,6 +125,10 @@ const PaymentPage = () => {
     ? passengers.reduce((sum, p) => sum + p.price, 0)
     : (currentStatus === "verified" ? (basePrice - deductionToApply) : basePrice);
 
+  // Group discount breakdown
+  const groupBaseTotal = isGroup ? passengers.reduce((sum, p) => sum + (p.basePrice || p.price), 0) : 0;
+  const hasGroupDiscount = isGroup && groupBaseTotal > finalPrice;
+
   useEffect(() => {
     if (shipId) {
       getShipById(shipId).then(setShip);
@@ -344,10 +348,16 @@ const PaymentPage = () => {
           <div className="border-t border-border pt-2 flex justify-between font-display font-bold text-foreground text-base">
             <span>Total</span>
             <div className="flex flex-col items-end">
+              {hasGroupDiscount && (
+                <>
+                  <span className="text-[10px] text-muted-foreground line-through opacity-70 leading-none mb-0.5">₱{groupBaseTotal.toLocaleString()}</span>
+                  <span className="text-[10px] text-emerald-500 leading-none mb-1">-{passengers.filter((p: any) => p.type !== "regular").length > 0 ? `₱${(groupBaseTotal - finalPrice).toLocaleString()} discount` : ""}</span>
+                </>
+              )}
               {!isGroup && currentStatus === "verified" && deductionToApply > 0 && (
                 <span className="text-[10px] text-emerald-500 line-through opacity-70 leading-none mb-1">₱{basePrice}</span>
               )}
-              <span className="text-primary leading-none">₱{finalPrice}</span>
+              <span className="text-primary leading-none">₱{finalPrice.toLocaleString()}</span>
             </div>
           </div>
         </div>

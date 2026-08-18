@@ -59,6 +59,14 @@ const SeatSelection = () => {
   const [email, setEmail] = useState("");
   const [passType, setPassType] = useState("Regular");
 
+  // Initialize passenger type from LegSelector selection
+  useEffect(() => {
+    if (routeTotal === 1 && routeGroups.length > 0) {
+      const initial = routeGroups[0];
+      setPassType(initial.charAt(0).toUpperCase() + initial.slice(1));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Biometric verification state (legacy fallback)
   const [verified, setVerified] = useState(false);
   const [verifiedScore, setVerifiedScore] = useState(0);
@@ -563,9 +571,9 @@ const SeatSelection = () => {
                           setVerified(false);
                           setVerifiedScore(0);
                         } else {
-                          if (verified && passType === pt.id) return;
-                          setPendingPassType(pt.id);
-                          setScannerOpen(true);
+                          setPassType(pt.id);
+                          setVerified(false);
+                          setVerifiedScore(0);
                         }
                       }}
                         className={`px-8 py-3 rounded-full text-xs font-bold transition-all border ${
@@ -602,11 +610,22 @@ const SeatSelection = () => {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                       <div className="border border-white/5 bg-white/5 rounded-xl p-4 flex gap-3 mt-2">
                         <FileText className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                        <div>
+                        <div className="flex-1">
                           <h4 className="text-white text-sm font-bold mb-1">ID Verification Required</h4>
-                          <p className="text-white/50 text-xs leading-relaxed">
-                            To claim the <span className="text-white font-bold">{passType === "Student" ? "Student" : passType === "PWD" ? "PWD" : "Senior"} discount</span>, you must provide a clear photo of your valid ID. Tap a discount type above to begin.
+                          <p className="text-white/50 text-xs leading-relaxed mb-3">
+                            To claim the <span className="text-white font-bold">{passType === "Student" ? "Student" : passType === "PWD" ? "PWD" : "Senior"} discount</span>, you must provide a clear photo of your valid ID.
                           </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPendingPassType(passType);
+                              setScannerOpen(true);
+                            }}
+                            className="w-full py-3 bg-[#E3000F]/10 border border-dashed border-[#E3000F]/30 hover:border-[#E3000F] rounded-xl flex items-center justify-center gap-2 text-[#E3000F] hover:bg-[#E3000F]/15 transition-all text-xs font-bold"
+                          >
+                            <Camera className="w-4 h-4" />
+                            Upload {passType === "Student" ? "Student" : passType === "PWD" ? "PWD" : "Senior"} ID
+                          </button>
                         </div>
                       </div>
                     </motion.div>

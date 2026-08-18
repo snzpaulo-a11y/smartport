@@ -92,11 +92,14 @@ const TicketReview = () => {
     return words.filter((w, i) => w !== words[i - 1]).join(" ");
   };
 
-  // Show the base fare until a discount ID is actually verified by admin.
-  const isUnverifiedDiscount = passengerType !== "regular" && idVerificationStatus !== "verified";
-  const singleDisplayPrice = isUnverifiedDiscount ? (basePrice || price) : price;
-  const groupDisplayPrice = passengers.reduce((sum, p) =>
-    sum + (p.type !== "regular" && p.idVerificationStatus !== "verified" ? (p.basePrice || p.price) : p.price), 0);
+  // Discount breakdown — always show when a non-regular type has a lower price
+  const hasSingleDiscount = passengerType !== "regular" && basePrice > 0 && basePrice > price;
+  const singleDiscountAmt = hasSingleDiscount ? basePrice - price : 0;
+  const singleDisplayPrice = price;
+
+  const groupBaseTotal = passengers.reduce((sum, p) => sum + (p.basePrice || p.price), 0);
+  const groupDiscountedTotal = passengers.reduce((sum, p) => sum + p.price, 0);
+  const hasGroupDiscount = isGroup && groupBaseTotal > groupDiscountedTotal;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-body pb-24">
@@ -225,9 +228,25 @@ const TicketReview = () => {
           <div className="flex justify-between items-end relative z-10">
             <div>
               <p className="text-slate-500 text-[10px] font-bold tracking-[0.1em] uppercase mb-1">Total Amount</p>
-              <p className="text-[40px] leading-none font-extrabold text-slate-900 tracking-tight">
-                ₱{(isGroup ? groupDisplayPrice : singleDisplayPrice).toFixed(2)}
-              </p>
+              {isGroup ? (
+                hasGroupDiscount ? (
+                  <div>
+                    <p className="text-slate-400 text-sm line-through">₱{groupBaseTotal.toLocaleString()}</p>
+                    <p className="text-emerald-600 text-[11px] font-bold">-{passengers.filter(p => p.type !== "regular").length > 0 ? `₱${(groupBaseTotal - groupDiscountedTotal).toLocaleString()} discount` : ""}</p>
+                    <p className="text-[36px] leading-none font-extrabold text-slate-900 tracking-tight">₱{groupDiscountedTotal.toLocaleString()}</p>
+                  </div>
+                ) : (
+                   <p className="text-[40px] leading-none font-extrabold text-slate-900 tracking-tight">₱{groupDiscountedTotal.toLocaleString()}</p>
+                )
+              ) : hasSingleDiscount ? (
+                <div>
+                  <p className="text-slate-400 text-sm line-through">₱{basePrice.toLocaleString()}</p>
+                  <p className="text-emerald-600 text-[11px] font-bold">-₱{singleDiscountAmt.toLocaleString()} discount</p>
+                  <p className="text-[36px] leading-none font-extrabold text-slate-900 tracking-tight">₱{singleDisplayPrice.toLocaleString()}</p>
+                </div>
+              ) : (
+                <p className="text-[40px] leading-none font-extrabold text-slate-900 tracking-tight">₱{singleDisplayPrice.toLocaleString()}</p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-slate-500 text-[9px] font-bold tracking-[0.2em] uppercase mb-0.5">Booking ID</p>
