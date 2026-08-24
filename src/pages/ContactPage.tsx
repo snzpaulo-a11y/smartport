@@ -38,9 +38,10 @@ const ContactPage = () => {
       if (error) throw error;
       setName(""); setEmail(""); setMessage("");
       setStatus("sent"); setStatusText("Your message has been sent. We'll get back to you shortly.");
-    } catch (err: any) {
+    } catch (err) {
       setStatus("error");
-      setStatusText(err?.message?.includes("does not exist")
+      const msg = (err as { message?: string })?.message;
+      setStatusText(msg?.includes("does not exist")
         ? "Message delivery is not configured yet. Please email support@smartport.ph."
         : "Failed to send message. Please try again.");
     } finally {

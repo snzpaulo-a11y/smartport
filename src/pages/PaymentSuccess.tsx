@@ -12,10 +12,10 @@ const PaymentSuccess = () => {
   
   // Get booking data from URL or Location State (Fallback to Session Storage)
   const bookingId = params.get("booking_id") || 
-                  (location.state as any)?.bookingId || 
+                  (location.state as { bookingId?: string } | null)?.bookingId || 
                   sessionStorage.getItem("pending_booking_id") || "";
                   
-  const isReservation = (location.state as any)?.isReservation || 
+  const isReservation = (location.state as { isReservation?: boolean } | null)?.isReservation || 
                         sessionStorage.getItem("pending_is_reservation") === "true";
   
   const [status, setStatus] = useState<"verifying" | "confirmed" | "error">("verifying");

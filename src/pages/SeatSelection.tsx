@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser } from "@/lib/store";
+import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, Booking, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser } from "@/lib/store";
 import { ArrowLeft, Loader2, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
 import BiometricScanner from "@/components/BiometricScanner";
 
@@ -93,7 +93,7 @@ const SeatSelection = () => {
   const [pendingPassType, setPendingPassType] = useState<string | null>(null);
 
   // Seat Type memory
-  const [seatTypeChoice, setSeatTypeChoice] = useState<"seat" | "bunk" | null>((location.state as any)?.accommodationType || null);
+  const [seatTypeChoice, setSeatTypeChoice] = useState<"seat" | "bunk" | null>((location.state as { accommodationType?: "seat" | "bunk" } | null)?.accommodationType || null);
 
   // Group bookings already persisted this session — cancelled if the user backs
   // out and re-does the passenger step, so we don't orphan seats.
@@ -137,7 +137,7 @@ const SeatSelection = () => {
     ]).then(([s, seatsData]) => {
       setShip(s);
       setSeats(seatsData);
-      if ((location.state as any)?.accommodationType) {
+      if ((location.state as { accommodationType?: string } | null)?.accommodationType) {
         setStep("seat");
       }
       setLoading(false);
@@ -473,7 +473,7 @@ const SeatSelection = () => {
                             seatId: p.seatId,
                             seatLabel: p.seatLabel,
                             passengerName: p.name,
-                            passengerType: p.type as any,
+                            passengerType: p.type as Booking["passengerType"],
                             phone: p.phone,
                             email: p.email || undefined,
                             status: "pending",
@@ -512,7 +512,7 @@ const SeatSelection = () => {
                             boardStop,
                             alightStop,
                             tripDate,
-                            bookingType: (location.state as any)?.bookingType
+                            bookingType: (location.state as { bookingType?: string } | null)?.bookingType
                           }
                         });
                       }}
@@ -654,8 +654,7 @@ const SeatSelection = () => {
                         
                         // If regular passenger, we save now to lock the seat
                         if (!bId && passType === "Regular") {
-                          bId = generateId();
-                          try {
+                          bId = generateId();                          try {
                             const user = await getCurrentUser();
                             await saveBooking({
                               id: bId,
@@ -690,7 +689,7 @@ const SeatSelection = () => {
                             price: fPrice, basePrice: currentBase, deduction, verified, verifiedScore,
                             idImageUrl, idVerificationStatus: passType === "Regular" ? "none" : "pending",
                             boardStop, alightStop, legPrice: currentLegPrice,
-                            bookingType: (location.state as any)?.bookingType,
+                            bookingType: (location.state as { bookingType?: string } | null)?.bookingType,
                             seatLabel: selectedSeat.label,
                             shipName: ship.name
                           }
@@ -746,7 +745,7 @@ const SeatSelection = () => {
                   seatId: currentPassenger.seatId,
                   seatLabel: currentPassenger.seatLabel,
                   passengerName: currentPassenger.name || "Pending Name",
-                  passengerType: currentPassenger.type.toLowerCase() as any,
+                  passengerType: currentPassenger.type.toLowerCase() as Booking["passengerType"],
                   phone: currentPassenger.phone || "0000000000",
                   email: currentPassenger.email || undefined,
                   status: "pending",
@@ -766,7 +765,7 @@ const SeatSelection = () => {
 
               } else {
                 // REUSE existing ID if we have one to avoid "Ghost" tickets
-                let bId = sessionStorage.getItem("current_booking_id");
+                const bId = sessionStorage.getItem("current_booking_id");
                 const bookingIdToUse = bId || generateId();
                 
                 const url = await uploadIDImage(bookingIdToUse, fileBlob);
@@ -785,7 +784,7 @@ const SeatSelection = () => {
                   seatId: selectedSeatIds[0] || "",
                   seatLabel: selectedSeat?.label || "",
                   passengerName: fullName || "Pending Name",
-                  passengerType: pType.toLowerCase() as any,
+                  passengerType: pType.toLowerCase() as Booking["passengerType"],
                   phone: phone || "0000000000",
                   email: email || undefined,
                   status: "pending",
@@ -804,9 +803,9 @@ const SeatSelection = () => {
                 // Store booking ID for later steps
                 sessionStorage.setItem("current_booking_id", bookingIdToUse);
               }
-            } catch (err: any) {
+            } catch (err) {
               console.error("Upload/Save error:", err);
-              alert(err.message || "Failed to process ID. Please try again.");
+              alert((err instanceof Error ? err.message : "") || "Failed to process ID. Please try again.");
             } finally {
               setIsUploadingId(false);
               setScannerOpen(false);

@@ -9,7 +9,7 @@ import BottomNav from "@/components/BottomNav";
 const BookingHome = () => {
   const navigate = useNavigate();
   const [ships, setShips] = useState<Ship[]>([]);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ user_metadata?: { full_name?: string } } | null>(null);
   const [showIdModal, setShowIdModal] = useState(false);
   const today = getLocalDate();
 
@@ -22,7 +22,7 @@ const BookingHome = () => {
       }
     });
     getShips(true).then(data => {
-      let filtered = data.filter(s => s.isActive);
+      const filtered = data.filter(s => s.isActive);
       setShips(filtered);
     });
 

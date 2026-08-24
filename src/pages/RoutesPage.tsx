@@ -8,7 +8,7 @@ import BottomNav from "@/components/BottomNav";
 
 const RoutesPage = () => {
   const navigate = useNavigate();
-  const [routes, setRoutes] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<{ from: string; to: string; time: string; feature: string; desc: string; shipName: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,7 +20,7 @@ const RoutesPage = () => {
       }
 
       const allShips = await getShips(true);
-      let displayShips = allShips.filter(s => s.isActive);
+      const displayShips = allShips.filter(s => s.isActive);
 
       const formattedRoutes = displayShips.map(ship => {
         const stops = getShipStops(ship);

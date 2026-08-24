@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getSeatsForShipAndDate, getLocalDate, generateId, uploadIDImage, getCurrentUser, saveBooking, Booking } from "@/lib/store";
+import { getShipById, getSeatsForShipAndDate, getLocalDate, generateId, uploadIDImage, getCurrentUser, saveBooking, Booking, Ship, Seat } from "@/lib/store";
 import { ArrowLeft, User, Phone, Mail, Tag, AlertTriangle, Shield, CheckCircle, Camera, Loader2 } from "lucide-react";
 import IdentityCenter from "@/components/IdentityCenter";
 
@@ -30,9 +30,9 @@ const TicketPreview = () => {
     tripDate?: string;
   };
 
-  const [ship, setShip]   = useState<any>(null);
-  const [seat, setSeat]   = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [ship, setShip]   = useState<Ship | null>(null);
+  const [seat, setSeat]   = useState<Seat | null>(null);
+  const [currentUser, setCurrentUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
   const [name, setName]   = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -138,7 +138,7 @@ const TicketPreview = () => {
         seatId: seatId!,
         seatLabel: seat.label,
         passengerName: name,
-        passengerType: passengerType as any,
+        passengerType: passengerType as Booking["passengerType"],
         phone: phone,
         email: email || undefined,
         status: overrideStatus || "pending",
@@ -157,9 +157,9 @@ const TicketPreview = () => {
       await saveBooking(bookingData);
       console.log("[persistBooking] Save successful: " + currentBookingId);
       return true;
-    } catch (err: any) {
+    } catch (err) {
       console.error("[persistBooking] CRITICAL FAILURE:", err);
-      alert("Failed to save booking: " + (err.message || "Unknown error"));
+      alert("Failed to save booking: " + (err instanceof Error ? err.message : "Unknown error"));
       throw err;
     }
   };
@@ -334,8 +334,8 @@ const TicketPreview = () => {
               setLoading(false);
               return;
             }
-          } catch (err: any) {
-            alert("Failed to save booking: " + (err.message || "Unknown error"));
+          } catch (err) {
+            alert("Failed to save booking: " + (err instanceof Error ? err.message : "Unknown error"));
             setLoading(false);
             return;
           }

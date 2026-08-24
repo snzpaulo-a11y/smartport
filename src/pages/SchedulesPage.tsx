@@ -19,7 +19,7 @@ const SchedulesPage = () => {
         return;
       }
       getShips(true).then(data => {
-        let filtered = data.filter(s => s.isActive);
+        const filtered = data.filter(s => s.isActive);
         setShips(filtered);
         setLoading(false);
       });

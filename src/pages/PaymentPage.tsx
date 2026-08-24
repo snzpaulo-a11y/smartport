@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { saveBooking, generateId, getLocalDate, getCurrentUser, supabase, getShipById, updateBookingToRegular, markBookingsCounter, computeCounterDeadline } from "@/lib/store";
+import { saveBooking, generateId, getLocalDate, getCurrentUser, supabase, getShipById, updateBookingToRegular, markBookingsCounter, computeCounterDeadline, Ship } from "@/lib/store";
 import { ArrowLeft, Loader2, AlertCircle, Shield } from "lucide-react";
 import { useEffect } from "react";
 
@@ -22,7 +22,7 @@ async function createPayMongoCheckout(
   });
 
   if (res.error) {
-    const detail = (res.error as any)?.message || "Failed to create payment session.";
+    const detail = (res.error as { message?: string })?.message || "Failed to create payment session.";
     throw new Error(detail);
   }
   const session = res.data?.data;
@@ -87,11 +87,11 @@ const PaymentPage = () => {
     }>;
   };
 
-  const bookingId = (location.state as any)?.bookingId || "";
+  const bookingId = (location.state as { bookingId?: string } | null)?.bookingId || "";
   const basePrice = stateBasePrice || price;
   const deduction = stateDeduction || 0;
 
-  const shipName  = (location.state as any)?.shipName || shipId || "";
+  const shipName  = (location.state as { shipName?: string } | null)?.shipName || shipId || "";
   const seatLabel = stateSeatLabel || seatId?.split("-").pop()?.toUpperCase() || "";
 
   // Helper to remove duplicate adjacent words (e.g. "Romblon Romblon" -> "Romblon")
@@ -104,7 +104,7 @@ const PaymentPage = () => {
   const boardDisplay = cleanStr(boardStop || "");
   const alightDisplay = cleanStr(alightStop || "");
 
-  const [ship, setShip]       = useState<any>(null);
+  const [ship, setShip]       = useState<Ship | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [currentStatus, setCurrentStatus] = useState<string>(idVerificationStatus || "none");
@@ -223,8 +223,8 @@ const PaymentPage = () => {
 
         window.location.href = session.attributes.checkout_url;
       }
-    } catch (e: any) {
-      setError(e.message || "Something went wrong. Please try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
       setLoading(false);
     }
   };
@@ -262,8 +262,8 @@ const PaymentPage = () => {
       navigate("/counter-confirmation", {
         state: { bookingIds: ids, refs, deadline: deadline.toISOString() },
       });
-    } catch (e: any) {
-      setError(e.message || "Something went wrong. Please try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -278,8 +278,8 @@ const PaymentPage = () => {
       // Update local state to unlock
       setCurrentStatus("none");
       window.location.reload();
-    } catch (err: any) {
-      setError("Failed to switch: " + err.message);
+    } catch (err) {
+      setError("Failed to switch: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);
     }
@@ -351,7 +351,7 @@ const PaymentPage = () => {
               {hasGroupDiscount && (
                 <>
                   <span className="text-[10px] text-muted-foreground line-through opacity-70 leading-none mb-0.5">₱{groupBaseTotal.toLocaleString()}</span>
-                  <span className="text-[10px] text-emerald-500 leading-none mb-1">-{passengers.filter((p: any) => p.type !== "regular").length > 0 ? `₱${(groupBaseTotal - finalPrice).toLocaleString()} discount` : ""}</span>
+                  <span className="text-[10px] text-emerald-500 leading-none mb-1">-{passengers.filter(p => p.type !== "regular").length > 0 ? `₱${(groupBaseTotal - finalPrice).toLocaleString()} discount` : ""}</span>
                 </>
               )}
               {!isGroup && currentStatus === "verified" && deductionToApply > 0 && (

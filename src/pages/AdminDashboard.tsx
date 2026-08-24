@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings } from "@/lib/store";
+import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking } from "@/lib/store";
 import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
   CheckCircle, AlertTriangle, History, UserCog, ChevronDown, ChevronRight,
   Plus, ImageIcon, X, Pencil, Save, ToggleLeft, ToggleRight, MapPin, Clock, ShieldAlert, Power, MessageSquare, Star, RefreshCw, Printer, HandCoins,
-  ScanLine, Keyboard, Camera, CameraOff, Wallet, Search, Calendar
+  ScanLine, Keyboard, Camera, CameraOff, Wallet, Search, Calendar, LucideIcon
 } from "lucide-react";
 import { supabase } from "@/lib/store";
 import { Html5Qrcode } from "html5-qrcode";
@@ -28,7 +28,27 @@ const InputField = ({ label, value, onChange, placeholder, type = "text", requir
   </div>
 );
 
-const BookingRow = ({ b, typeColor, onCollect, onPrint }: { b: any; typeColor: Record<string, string>; onCollect?: (id: string) => void; onPrint?: (id: string) => void }) => (
+// Hybrid row: raw snake_case DB columns + camelCase aliases added by loadShipData.
+type DashboardBooking = BookingRowData & Partial<Booking>;
+
+interface SeatGridRow {
+  id: string; label?: string | null; type?: string | null;
+  row_num?: number | null; col_num?: number | null;
+  status: string; bookingStatus?: string | null;
+}
+
+interface StopForm { location: string; arrival: string; departure: string; scheduleDays?: string }
+
+interface NewShipModel {
+  name: string;
+  type: "ferry" | "pumpboat" | "fastcraft" | "roro";
+  stops: StopForm[];
+  price: number;
+  totalSeats: number;
+  scheduleDays: string;
+}
+
+const BookingRow = ({ b, typeColor, onCollect, onPrint }: { b: DashboardBooking; typeColor: Record<string, string>; onCollect?: (id: string) => void; onPrint?: (id: string) => void }) => (
   <div className="glass-card rounded-xl p-4 flex items-center justify-between gap-3 border-border/50 hover:bg-muted/30 transition-colors">
     <div className="flex items-center gap-4 min-w-0">
       <div className={`w-2 h-10 rounded-full ${typeColor[b.passengerType] || "bg-primary/20"}`} />
@@ -74,7 +94,7 @@ const BookingRow = ({ b, typeColor, onCollect, onPrint }: { b: any; typeColor: R
   </div>
 );
 
-const ReservationRow = ({ b, onSelect }: { b: any; onSelect: (id: string) => void }) => (
+const ReservationRow = ({ b, onSelect }: { b: DashboardBooking; onSelect: (id: string) => void }) => (
   <button onClick={() => onSelect(b.id)} className="glass-card rounded-xl p-4 flex items-center justify-between gap-3 border-border/50 hover:bg-muted/30 transition-colors text-left w-full">
     <div className="flex items-center gap-4 min-w-0">
       <div className="w-2 h-10 rounded-full bg-amber-500/40" />
@@ -141,8 +161,8 @@ const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void })
 type Tab = "manifest" | "reservations" | "scan" | "seats" | "history" | "staff" | "vessel" | "reviews" | "verification";
 const today = getLocalDate();
 
-function groupByDate(bookings: any[]) {
-  const groups: Record<string, Record<string, Record<string, any[]>>> = {};
+function groupByDate(bookings: DashboardBooking[]) {
+  const groups: Record<string, Record<string, Record<string, DashboardBooking[]>>> = {};
   for (const b of bookings) {
     const date = b.tripDate || b.createdAt?.split("T")[0] || "Unknown";
     const [year, month, day] = date.split("-");
@@ -174,9 +194,9 @@ const AdminDashboard = () => {
   const adminType = (currentStaff.shipType || "ferry") as "ferry" | "pumpboat";
   console.log("[AdminDashboard] adminType:", adminType);
   const [ships, setShips]                     = useState<Ship[]>([]);
-  const [todayBookings, setTodayBookings]     = useState<any[]>([]);
-  const [historyBookings, setHistoryBookings] = useState<any[]>([]);
-  const [seats, setSeats]                     = useState<any[]>([]);
+  const [todayBookings, setTodayBookings]     = useState<DashboardBooking[]>([]);
+  const [historyBookings, setHistoryBookings] = useState<DashboardBooking[]>([]);
+  const [seats, setSeats]                     = useState<SeatGridRow[]>([]);
   const [staffList, setStaffList]             = useState<Staff[]>([]);
   const [scanHistory, setScanHistory]         = useState<ScanRecord[]>([]);
   const [reviews, setReviews]                 = useState<Review[]>([]);
@@ -186,9 +206,9 @@ const AdminDashboard = () => {
   console.log("[AdminDashboard] Tab states initialized.");
   const [selectedManifestDate, setSelectedManifestDate] = useState<string>(today);
   const [loading, setLoading]                 = useState(false);
-  const [verificationBookings, setVerificationBookings] = useState<any[]>([]);
-  const [reservations, setReservations]                 = useState<any[]>([]);
-  const [allReservations, setAllReservations]           = useState<any[]>([]);
+  const [verificationBookings, setVerificationBookings] = useState<DashboardBooking[]>([]);
+  const [reservations, setReservations]                 = useState<DashboardBooking[]>([]);
+  const [allReservations, setAllReservations]           = useState<DashboardBooking[]>([]);
   const [reservationSearch, setReservationSearch]       = useState("");
   const [expandedYears, setExpandedYears]     = useState<string[]>([today.split("-")[0]]);
   const [expandedMonths, setExpandedMonths]   = useState<string[]>([]);
@@ -200,8 +220,8 @@ const AdminDashboard = () => {
   const [scanManualCode, setScanManualCode]     = useState("");
   const [scanError, setScanError]               = useState("");
   const [scanSuccessMsg, setScanSuccessMsg]     = useState("");
-  const [scanBooking, setScanBooking]           = useState<any | null>(null);
-  const [scanGroup, setScanGroup]               = useState<any[]>([]);
+  const [scanBooking, setScanBooking]           = useState<BookingRowData | null>(null);
+  const [scanGroup, setScanGroup]               = useState<BookingRowData[]>([]);
   const scanQrRef = useRef<Html5Qrcode | null>(null);
   const scanHasScanned = useRef(false);
 
@@ -217,7 +237,7 @@ const AdminDashboard = () => {
   const [requestingShip, setRequestingShip] = useState(false);
   const [shipFormMsg, setShipFormMsg]       = useState("");
   
-  const [newShipModel, setNewShipModel] = useState<any>({ 
+  const [newShipModel, setNewShipModel] = useState<NewShipModel>({ 
     name: "", type: adminType, stops: [{ location: "", departure: "", arrival: "-" }, { location: "", departure: "-", arrival: "" }],
     price: 100, totalSeats: 100, scheduleDays: ""
   });
@@ -240,13 +260,13 @@ const AdminDashboard = () => {
     
     const all = await getShips();
     setAllShipsForMapping(all); // Keep a list of ALL ships for name lookups
-    let filtered = freshRole === "super_admin" 
+    const filtered = freshRole === "super_admin" 
       ? all.filter(s => s.type === adminType) 
       : all.filter(s => freshShipIds.includes(s.id) || s.requester_id === currentStaff.id);
     
     setShips(filtered);
     if (!selectedShipId && filtered.length > 0) setSelectedShipId(filtered[0].id);
-  }, [adminType, currentStaff.id, currentStaff.role, selectedShipId]);
+  }, [adminType, currentStaff.id, selectedShipId]);
 
   const loadShipData = useCallback(async () => {
     if (!selectedShipId) return;
@@ -266,8 +286,8 @@ const AdminDashboard = () => {
       setHistoryBookings((hData || []).map(r => ({ ...r, passengerName: r.passenger_name, passengerType: r.passenger_type, seatLabel: r.seat_label, tripDate: r.trip_date })));
 
       const { data: sData } = await supabase.from("seats").select("*").eq("ship_id", selectedShipId).order("label");
-      setSeats((sData || []).map((s: any) => {
-        const booking = (tData || []).find((b: any) => b.seat_id === s.id);
+      setSeats((sData || []).map((s: { id: string; label?: string | null; type?: string | null; row_num?: number | null; col_num?: number | null; status: string }) => {
+        const booking = (tData || []).find((b: { seat_id: string }) => b.seat_id === s.id);
         const status = s.status === "blocked" ? "blocked" : booking ? (booking.status === "counter" ? "reserved" : "booked") : "available";
         return { ...s, status, bookingStatus: booking?.status || null };
       }));
@@ -288,7 +308,7 @@ const AdminDashboard = () => {
       const { data: vData } = await query.order("created_at", { ascending: true });
       setVerificationBookings(vData || []);
     } finally { setLoading(false); }
-  }, [selectedShipId, selectedManifestDate]);
+  }, [selectedShipId, selectedManifestDate, currentStaff.role, ships]);
 
   useEffect(() => { loadShips(); }, [loadShips]);
   useEffect(() => { loadShipData(); }, [loadShipData]);
@@ -336,7 +356,7 @@ const AdminDashboard = () => {
       await generateSeatsForShip(selectedShipId, currentShip.totalSeats, currentShip.totalBunks || 0);
       setShipFormMsg("Vessel architecture & route updated!");
       loadShips();
-    } catch (e: any) { setShipFormMsg(e.message); }
+    } catch (e) { setShipFormMsg(e instanceof Error ? e.message : "Update failed"); }
     finally { setLoading(false); setTimeout(() => setShipFormMsg(""), 3000); }
   };
 
@@ -352,14 +372,14 @@ const AdminDashboard = () => {
         setAddingStaff(false);
         setStaffMsg("");
       }, 2000);
-    } catch (e: any) {
-      setStaffMsg(e.message || "Failed to add staff");
+    } catch (e) {
+      setStaffMsg(e instanceof Error ? e.message : "Failed to add staff");
     } finally {
       setIsSavingStaff(false);
     }
   };
 
-  const handleStopChange = (idx: number, field: string, val: any) => {
+  const handleStopChange = (idx: number, field: keyof StopForm, val: string | undefined) => {
     const next = [...newShipModel.stops];
     next[idx] = { ...next[idx], [field]: val };
     setNewShipModel({ ...newShipModel, stops: next });
@@ -368,7 +388,7 @@ const AdminDashboard = () => {
   const handleRequestShip = async () => {
     setRequestingShip(true);
     try {
-      const routeStr = newShipModel.stops.map((s: any) => s.location).filter(Boolean).join(" → ");
+      const routeStr = newShipModel.stops.map(s => s.location).filter(Boolean).join(" → ");
       const id = await addShip({ ...newShipModel, route: routeStr, departure: newShipModel.stops[0].departure, arrival: newShipModel.stops[newShipModel.stops.length-1].arrival, isConfirmed: false, scheduleDays: newShipModel.scheduleDays, requesterId: currentStaff.id, requesterName: currentStaff.name });
       setShipFormMsg("Requested!");
       setTimeout(() => setShowShipCreate(false), 2000);
@@ -381,8 +401,8 @@ const AdminDashboard = () => {
       setLoading(true);
       await updateIDVerificationStatus(bookingId, "verified", true, undefined, currentStaff.id);
       await loadShipData(); // Refresh list
-    } catch (err: any) {
-      alert("Verification failed: " + err.message);
+    } catch (err) {
+      alert("Verification failed: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -396,8 +416,8 @@ const AdminDashboard = () => {
       setShowRejectModal(false);
       setRejectingBookingId(null);
       await loadShipData(); // Refresh list
-    } catch (err: any) {
-      alert("Action failed: " + err.message);
+    } catch (err) {
+      alert("Action failed: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -437,8 +457,8 @@ const AdminDashboard = () => {
       setReservations(prev => prev.filter(b => b.id !== bookingId));
       setTodayBookings(prev => prev.filter(b => b.id !== bookingId));
       await loadShipData();
-    } catch (err: any) {
-      alert("Failed to mark as paid: " + (err.message || "Unknown error"));
+    } catch (err) {
+      alert("Failed to mark as paid: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -473,7 +493,7 @@ const AdminDashboard = () => {
           () => { } // ignore frame scanning errors
         );
         setScanStarting(false);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Camera start error:", err);
         alert("Could not access camera.\nError: " + String(err));
         setScanCameraActive(false);
@@ -550,10 +570,10 @@ const AdminDashboard = () => {
       setTodayBookings(prev => prev.filter(b => !groupIds.includes(b.id)));
       setScanSuccessMsg(groupCount > 1 ? `${groupCount} reservations marked PAID — boarding QRs activated` : `${name} marked PAID — boarding QR activated`);
       loadShipData();
-    } catch (err: any) {
+    } catch (err) {
       setScanBooking(null);
       setScanGroup([]);
-      setScanError("Failed to approve: " + (err.message || "Unknown error"));
+      setScanError("Failed to approve: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -570,12 +590,12 @@ const AdminDashboard = () => {
       || (b.qr_code || "").toLowerCase().includes(q)
       || (b.id || "").toLowerCase().includes(q);
   });
-  const downloadCSV = (bookings: any[], label: string) => {
+  const downloadCSV = (bookings: DashboardBooking[], label: string) => {
     const csv = [["Name","Type","Seat","Phone"], ...bookings.map(b => [b.passengerName, b.passengerType, b.seatLabel, b.phone])].map(r => r.join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `${label}.csv`; a.click();
   };
 
-  const TABS: { id: Tab; label: string; icon: any }[] = [
+  const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
     { id: "manifest", label: "Manifest", icon: FileText },
     { id: "reservations", label: "Reservations", icon: Wallet },
     { id: "scan",     label: "Scan & Confirm", icon: ScanLine },
@@ -677,17 +697,17 @@ const AdminDashboard = () => {
                       const regular = seats.filter(s => s.type === "seat");
                       
                       
-                      // Sort berths numerically (U1, U2, ... U10) instead of alphabetically (U1, U10, U2)
-                      const sortBerths = (a: any, b: any) => {
-                        const numA = parseInt(a.label.replace(/\D/g, '')) || 0;
-                        const numB = parseInt(b.label.replace(/\D/g, '')) || 0;
-                        return numA - numB;
-                      };
+                       // Sort berths numerically (U1, U2, ... U10) instead of alphabetically (U1, U10, U2)
+                       const sortBerths = (a: SeatGridRow, b: SeatGridRow) => {
+                         const numA = parseInt((a.label || "").replace(/\D/g, '')) || 0;
+                         const numB = parseInt((b.label || "").replace(/\D/g, '')) || 0;
+                         return numA - numB;
+                       };
 
-                      const up = seats.filter(s => s.type === "bunk-upper").sort(sortBerths);
-                      const lw = seats.filter(s => s.type === "bunk-lower").sort(sortBerths);
-                      
-                      const Seat = (s: any) => (
+                       const up = seats.filter(s => s.type === "bunk-upper").sort(sortBerths);
+                       const lw = seats.filter(s => s.type === "bunk-lower").sort(sortBerths);
+                       
+                       const Seat = (s: SeatGridRow) => (
                         <button key={s.id} onClick={() => s.status !== "booked" && s.status !== "reserved" && supabase.from("seats").update({ status: s.status === "blocked" ? "available" : "blocked" }).eq("id", s.id).then(() => loadShipData())} 
                           className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500" : s.status === "reserved" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:scale-105"}`}>
                           {s.status === "booked" ? <Users className="w-3 h-3 mb-1" /> : s.status === "reserved" ? <Wallet className="w-3 h-3 mb-1" /> : s.status === "blocked" ? <Lock className="w-3 h-3 mb-1" /> : <Armchair className="w-3 h-3 mb-1" />}
@@ -874,9 +894,9 @@ const AdminDashboard = () => {
                               try {
                                 await deleteStaff(id);
                                 getStaffList(adminType).then(setStaffList);
-                              } catch (err: any) {
-                                alert("Failed to revoke access: " + (err.message || "Unknown error"));
-                              }
+                               } catch (err) {
+                                 alert("Failed to revoke access: " + (err instanceof Error ? err.message : "Unknown error"));
+                               }
                             } 
                           }} 
                         />
@@ -1015,12 +1035,12 @@ const AdminDashboard = () => {
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {["ease", "clarity", "recommend"].map((qId) => {
-                      const counts: any = {};
+                      const counts: Record<string, number> = {};
                       reviews.forEach(r => {
                         const val = r.surveyData?.[qId];
                         if (val) counts[val] = (counts[val] || 0) + 1;
                       });
-                      const topAnswer = Object.entries(counts).sort((a: any, b: any) => (b[1] as number) - (a[1] as number))[0];
+                      const topAnswer = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
                       
                       return (
                         <div key={qId} className="glass-card rounded-[2rem] p-6 border-border/50">
@@ -1031,7 +1051,7 @@ const AdminDashboard = () => {
                             <>
                               <h4 className="text-lg font-bold text-foreground mb-1">{topAnswer[0]}</h4>
                               <p className="text-primary text-[10px] font-black uppercase tracking-wider">
-                                {Math.round(((topAnswer[1] as number) / reviews.length) * 100)}% of passengers
+                                {Math.round((topAnswer[1] / reviews.length) * 100)}% of passengers
                               </p>
                             </>
                           ) : (
@@ -1080,7 +1100,7 @@ const AdminDashboard = () => {
                             )}
 
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                              {Object.entries(r.surveyData || {}).map(([q, a]: any) => (
+                              {Object.entries(r.surveyData || {}).map(([q, a]) => (
                                 <div key={q} className="bg-background/40 rounded-xl px-3 py-2 border border-border/20 shadow-sm">
                                   <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5 truncate">
                                     {q.replace(/_/g, " ")}
@@ -1363,7 +1383,7 @@ const AdminDashboard = () => {
                     <div className="space-y-6">
                        <div className="flex justify-between items-center"><p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Navigation Matrix</p><button onClick={() => setNewShipModel({...newShipModel, stops: [...newShipModel.stops, { location: "", arrival: "", departure: "" }]})} className="text-primary text-[10px] font-black uppercase hover:underline">+ Add Stop</button></div>
                        <div className="space-y-4">
-                          {newShipModel.stops.map((s: any, idx: number) => (
+                           {newShipModel.stops.map((s: StopForm, idx: number) => (
                              <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10">
                                 <div className="flex flex-col md:flex-row gap-4 items-end">
                                    <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : idx === newShipModel.stops.length-1 ? "Destination" : `Node #${idx+1}`} value={s.location} onChange={v => handleStopChange(idx, "location", v)} /></div>

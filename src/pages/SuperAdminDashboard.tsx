@@ -77,7 +77,7 @@ export default function SuperAdminDashboard() {
 
   // Ship Create Form
   const [showShipCreate, setShowShipCreate] = useState(false);
-  const [newShipModel, setNewShipModel] = useState<any>({ name: "", type: "ferry", route: "", departure: "", arrival: "", price: 100, totalSeats: 100 });
+  const [newShipModel, setNewShipModel] = useState<{ name: string; type: "ferry" | "pumpboat" | "fastcraft" | "roro"; route: string; departure: string; arrival: string; price: number; totalSeats: number }>({ name: "", type: "ferry", route: "", departure: "", arrival: "", price: 100, totalSeats: 100 });
   const [creatingShip, setCreatingShip] = useState(false);
   const [shipFormMsg, setShipFormMsg] = useState("");
   
@@ -155,8 +155,8 @@ export default function SuperAdminDashboard() {
       setNewShipType("ferry");
       fetchData();
       setTimeout(() => setShowCreate(false), 1500);
-    } catch (e: any) {
-      setFormMsg(e.message || "Failed to create admin");
+    } catch (e) {
+      setFormMsg(e instanceof Error ? e.message : "Failed to create admin");
     } finally {
       setCreating(false);
     }
@@ -200,8 +200,8 @@ export default function SuperAdminDashboard() {
       setShipFormMsg("Ship physically instantiated successfully!");
       await fetchData();
       setTimeout(() => setShowShipCreate(false), 1500);
-    } catch(e: any) {
-      setShipFormMsg(e.message || "Failed to instantiate fleet.");
+    } catch(e) {
+      setShipFormMsg(e instanceof Error ? e.message : "Failed to instantiate fleet.");
     } finally {
       setCreatingShip(false);
     }
@@ -230,9 +230,9 @@ export default function SuperAdminDashboard() {
     try {
       await deleteShip(id);
       await fetchData();
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      alert("Could not delete vessel: " + (e.message || "Unknown error"));
+      alert("Could not delete vessel: " + (e instanceof Error ? e.message : "Unknown error"));
     }
   };
 
@@ -264,8 +264,8 @@ export default function SuperAdminDashboard() {
       setSettingsMsg("Password updated successfully!");
       setNewAdminPass("");
       setTimeout(() => setSettingsMsg(""), 3000);
-    } catch (e: any) {
-      setSettingsMsg(e.message || "Failed to update password");
+    } catch (e) {
+      setSettingsMsg(e instanceof Error ? e.message : "Failed to update password");
     }
   };
 
@@ -718,12 +718,12 @@ export default function SuperAdminDashboard() {
                   {/* Survey Summary */}
                   <div className="grid grid-cols-3 gap-6">
                     {["ease", "clarity", "recommend"].map((qId) => {
-                      const counts: any = {};
+                      const counts: Record<string, number> = {};
                       reviews.forEach(r => {
                         const val = r.surveyData?.[qId];
                         if (val) counts[val] = (counts[val] || 0) + 1;
                       });
-                      const topAnswer = Object.entries(counts).sort((a: any, b: any) => b[1] as number - (a[1] as number))[0];
+                      const topAnswer = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
                       
                       return (
                         <div key={qId} className="bg-[#151A22] border border-white/5 rounded-2xl p-6">
@@ -734,7 +734,7 @@ export default function SuperAdminDashboard() {
                             <>
                               <h4 className="text-lg font-bold text-white mb-1">{topAnswer[0]}</h4>
                               <p className="text-[#3F70FF] text-xs font-bold uppercase tracking-wider">
-                                {Math.round(((topAnswer[1] as number) / reviews.length) * 100)}% of passengers
+                                {Math.round((topAnswer[1] / reviews.length) * 100)}% of passengers
                               </p>
                             </>
                           ) : (
@@ -777,7 +777,7 @@ export default function SuperAdminDashboard() {
                           )}
 
                           <div className="grid grid-cols-3 gap-2">
-                            {Object.entries(r.surveyData || {}).map(([q, a]: any) => (
+                            {Object.entries(r.surveyData || {}).map(([q, a]) => (
                               <div key={q} className="bg-white/5 rounded-lg px-3 py-2 border border-white/5">
                                 <p className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-tighter mb-1 line-clamp-1">
                                   {q.replace(/_/g, " ")}
@@ -973,7 +973,7 @@ export default function SuperAdminDashboard() {
                    </div>
                    <div>
                      <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Type</label>
-                     <select value={newShipModel.type} onChange={(e) => setNewShipModel({...newShipModel, type: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50">
+                     <select value={newShipModel.type} onChange={(e) => setNewShipModel({...newShipModel, type: e.target.value as "ferry" | "pumpboat"})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50">
                        <option value="ferry">Ferry</option>
                        <option value="pumpboat">Pumpboat</option>
                      </select>
@@ -992,11 +992,11 @@ export default function SuperAdminDashboard() {
                    </div>
                    <div>
                      <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Base Ticket Price (₱)</label>
-                     <input type="number" min="0" value={newShipModel.price} onChange={(e) => setNewShipModel({...newShipModel, price: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                      <input type="number" min="0" value={newShipModel.price} onChange={(e) => setNewShipModel({...newShipModel, price: Number(e.target.value)})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
                    </div>
                    <div>
                      <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Total Seating Capacity</label>
-                     <input type="number" min="1" max="1000" value={newShipModel.totalSeats} onChange={(e) => setNewShipModel({...newShipModel, totalSeats: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                      <input type="number" min="1" max="1000" value={newShipModel.totalSeats} onChange={(e) => setNewShipModel({...newShipModel, totalSeats: Number(e.target.value)})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
                    </div>
                  </div>
                  {shipFormMsg && <p className={`text-sm text-center font-medium ${shipFormMsg.includes("success") ? "text-emerald-500" : "text-rose-500"}`}>{shipFormMsg}</p>}

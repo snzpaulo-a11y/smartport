@@ -9,12 +9,17 @@ import {
 } from "lucide-react";
 
 // Load html-to-image from CDN once
-function loadHtmlToImage(): Promise<any> {
+type HtmlToImageLib = {
+  toPng: (node: HTMLElement, options?: Record<string, unknown>) => Promise<string>;
+};
+
+function loadHtmlToImage(): Promise<HtmlToImageLib | null> {
   return new Promise((resolve) => {
-    if ((window as any).htmlToImage) return resolve((window as any).htmlToImage);
+    const w = window as unknown as { htmlToImage?: HtmlToImageLib };
+    if (w.htmlToImage) return resolve(w.htmlToImage);
     const script = document.createElement("script");
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
-    script.onload = () => resolve((window as any).htmlToImage);
+    script.onload = () => resolve(w.htmlToImage || null);
     script.onerror = () => resolve(null);
     document.head.appendChild(script);
   });
@@ -63,6 +68,9 @@ const DigitalTicket = () => {
   // Group tickets state
   const [groupBookings, setGroupBookings] = useState<Booking[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [justActivated, setJustActivated] = useState(false);
+  const groupIdsRef = useRef<string[]>([]);
+  const prevStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -105,7 +113,74 @@ const DigitalTicket = () => {
 
   const activeBooking = groupBookings[activeIdx] || booking;
 
-  const handleFeedbackSubmit = async (rating: number, surveyData: any, comment: string) => {
+  // Keep the group id list in a ref so the polling effect can reuse it without
+  // being torn down every time the list state changes.
+  useEffect(() => {
+    groupIdsRef.current = groupBookings.map(b => b.id);
+  }, [groupBookings]);
+
+  // Live status sync — while any ticket in this booking is waiting on payment
+  // (pending/counter), poll Supabase every few seconds. The instant staff
+  // approves at the counter (counter → paid) the QR activates itself here, no
+  // navigation or refresh needed. Polling stops once nothing is pending.
+  useEffect(() => {
+    if (!bookingId || loading) return;
+    let cancelled = false;
+
+    const refresh = async () => {
+      if (document.hidden || cancelled) return;
+      try {
+        const fresh = await getBookingById(bookingId);
+        if (!fresh || cancelled) return;
+        setBooking(prev => {
+          if (!prev) return fresh;
+          const changed =
+            prev.status !== fresh.status ||
+            prev.qrCode !== fresh.qrCode ||
+            prev.legPrice !== fresh.legPrice ||
+            prev.passengerType !== fresh.passengerType ||
+            prev.idVerificationStatus !== fresh.idVerificationStatus ||
+            prev.idRejectedReason !== fresh.idRejectedReason;
+          return changed ? fresh : prev;
+        });
+
+        // Group bookings: refresh member statuses so every ticket in the slider activates too
+        const ids = groupIdsRef.current;
+        if (ids.length > 1) {
+          const { data } = await supabase.from("bookings").select("*").in("id", ids);
+          if (data && !cancelled) {
+            const rows = data.map(row => dbToBooking(row)).sort((x, y) => x.seatLabel.localeCompare(y.seatLabel));
+            setGroupBookings(prev =>
+              prev.some(p => rows.find(r => r.id === p.id)?.status !== p.status) ? rows : prev
+            );
+          }
+        }
+      } catch { /* transient network error — retry on next tick */ }
+    };
+
+    const interval = setInterval(refresh, 4000);
+    const onFocus = () => { refresh(); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [bookingId, loading, activeBooking?.status, groupBookings.length]);
+
+  // Celebrate the counter → paid flip when it arrives via polling
+  useEffect(() => {
+    const s = activeBooking?.status ?? null;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = s;
+    if (prev && s && prev !== s && s === "paid") {
+      setJustActivated(true);
+      const t = setTimeout(() => setJustActivated(false), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [activeBooking?.status]);
+
+  const handleFeedbackSubmit = async (rating: number, surveyData: Record<string, string>, comment: string) => {
     try {
       await submitReview({
         bookingId: activeBooking?.id || bookingId!,
@@ -212,6 +287,20 @@ const DigitalTicket = () => {
             Next Ticket →
           </button>
         </div>
+      )}
+
+      {/* Payment approved live-sync banner */}
+      {justActivated && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-center gap-2.5"
+        >
+          <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+          <p className="text-xs font-bold text-emerald-500">
+            Payment approved! Your boarding QR is now active — no need to reload.
+          </p>
+        </motion.div>
       )}
 
       {/* Ticket card — this is what gets saved as image */}

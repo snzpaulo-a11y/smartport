@@ -39,7 +39,7 @@ const MyTickets = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<(Booking & { shipName?: string; shipRoute?: string })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -70,9 +70,9 @@ const MyTickets = () => {
           })
         );
         setTickets(enriched);
-      } catch (err: any) {
+      } catch (err) {
         console.error("[MyTickets] Load failed:", err);
-        alert("Failed to load tickets: " + (err.message || "Unknown error"));
+        alert("Failed to load tickets: " + (err instanceof Error ? err.message : "Unknown error"));
       } finally {
         setLoading(false);
       }
@@ -278,9 +278,9 @@ const MyTickets = () => {
                                           ? { ...t, passengerType: 'regular', legPrice: fullPrice, idVerificationStatus: 'none' } 
                                           : t
                                       ));
-                                    } catch (err: any) {
+                                    } catch (err) {
                                       console.error("Update failed:", err);
-                                      alert("Failed to update booking: " + (err.message || "Unknown error"));
+                                      alert("Failed to update booking: " + (err instanceof Error ? err.message : "Unknown error"));
                                     }
                                   }
                                 }}
@@ -295,9 +295,9 @@ const MyTickets = () => {
                                     try {
                                       await deleteBooking(ticket.id);
                                       setTickets(prev => prev.filter(t => t.id !== ticket.id));
-                                    } catch (err: any) {
+                                    } catch (err) {
                                       console.error("Cancel failed:", err);
-                                      alert("Failed to cancel booking: " + (err.message || "Unknown error"));
+                                      alert("Failed to cancel booking: " + (err instanceof Error ? err.message : "Unknown error"));
                                     }
                                   }
                                 }}
@@ -379,8 +379,8 @@ const MyTickets = () => {
                                                     ? { ...t, passengerType: 'regular', legPrice: fullPrice, idVerificationStatus: 'none' } 
                                                     : t
                                                 ));
-                                              } catch (err: any) {
-                                                alert("Failed to update booking: " + err.message);
+                                              } catch (err) {
+                                                alert("Failed to update booking: " + (err instanceof Error ? err.message : "Unknown error"));
                                               }
                                             }
                                           }}
@@ -395,8 +395,8 @@ const MyTickets = () => {
                                             try {
                                               await deleteBooking(ticket.id);
                                               setTickets(prev => prev.filter(t => t.id !== ticket.id));
-                                            } catch (err: any) {
-                                              alert("Failed to cancel booking: " + err.message);
+                                            } catch (err) {
+                                              alert("Failed to cancel booking: " + (err instanceof Error ? err.message : "Unknown error"));
                                             }
                                           }
                                         }}
@@ -538,8 +538,8 @@ const MyTickets = () => {
                               try {
                                 await deleteBooking(ticket.id);
                                 setTickets(prev => prev.filter(t => t.id !== ticket.id));
-                              } catch (err: any) {
-                                alert("Failed to cancel booking: " + (err.message || "Unknown error"));
+                              } catch (err) {
+                                alert("Failed to cancel booking: " + (err instanceof Error ? err.message : "Unknown error"));
                               }
                             }
                           }}

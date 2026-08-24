@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline } from "@/lib/store";
+import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline, BookingRow } from "@/lib/store";
 import {
   ScanLine, ArrowLeft, Keyboard, AlertTriangle,
   CheckCircle, XCircle, Camera, CameraOff, Loader2, ShieldAlert, X, LogOut, Users, Wallet
 } from "lucide-react";
 import { supabase } from "@/lib/store";
 import { Html5Qrcode } from "html5-qrcode";
+
+type ScanDisplayBooking = {
+  passengerName: string; passengerType: string; seatLabel: string;
+  boardStop?: string | null; alightStop?: string | null;
+  legPrice?: number | null; basePrice?: number;
+};
+
 const ScannerPage = () => {
   const navigate = useNavigate();
   const [manualCode, setManualCode] = useState("");
@@ -17,7 +24,7 @@ const ScannerPage = () => {
   const [scanResult, setScanResult] = useState<{
     type: "success" | "duplicate" | "invalid" | "counter";
     message: string;
-    booking?: any;
+    booking?: ScanDisplayBooking;
   } | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -67,7 +74,7 @@ const ScannerPage = () => {
             () => { } // ignore frame scanning errors
           );
           setStarting(false);
-        } catch (err: any) {
+        } catch (err) {
           console.error("Camera start error:", err);
           alert("Could not access camera.\nError: " + String(err));
           setCameraActive(false);
@@ -75,7 +82,7 @@ const ScannerPage = () => {
         }
       }, 100);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error("Camera init error:", err);
       setStarting(false);
     }
@@ -95,8 +102,9 @@ const ScannerPage = () => {
     setProcessing(true);
     try {
       const cleanCode = code.trim();
-      let { data: booking, error } = await supabase
+      const { data: firstBooking } = await supabase
         .from("bookings").select("*").eq("qr_code", cleanCode).maybeSingle();
+      let booking = firstBooking as BookingRow | null;
 
       if (!booking) {
         const altCode = cleanCode.replace(/^SPT-/, "");
@@ -104,7 +112,7 @@ const ScannerPage = () => {
           .from("bookings").select("*")
           .or(`id.eq.${cleanCode},id.eq.${altCode},qr_code.eq.SPT-${cleanCode},qr_code.eq.${altCode}`)
           .maybeSingle();
-        if (altBooking) booking = altBooking;
+        if (altBooking) booking = altBooking as BookingRow;
       }
 
       if (!booking) {
@@ -153,7 +161,7 @@ const ScannerPage = () => {
           return;
         }
 
-        if (getCounterDeadline(booking).getTime() <= Date.now()) {
+        if (getCounterDeadline({ counterDeadline: booking.counter_deadline ?? undefined, createdAt: booking.created_at }).getTime() <= Date.now()) {
           setScanResult({
             type: "invalid",
             message: "Counter hold expired — seat has been released.",

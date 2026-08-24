@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { User, Session } from "@supabase/supabase-js";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 /** Returns today's date in YYYY-MM-DD using the local timezone (avoids UTC drift). */
@@ -134,20 +135,85 @@ export interface Review {
   passengerName: string;
   rating: number;
   comment: string;
-  surveyData: any;
+  surveyData: Record<string, string> | null;
   createdAt: string;
+}
+
+// Raw (snake_case) row shapes returned by Supabase before mapping to domain types.
+export interface BookingRow {
+  id: string; ship_id: string; seat_id: string; seat_label: string;
+  passenger_name: string; passenger_type: string; phone: string;
+  status: Booking["status"]; qr_code?: string | null;
+  created_at: string; user_id?: string | null;
+  counter_deadline?: string | null; accommodation_type?: string | null;
+  trip_date?: string | null; board_stop?: string | null; alight_stop?: string | null;
+  leg_price?: number | null; email?: string | null;
+  is_id_verified?: boolean | null; verification_score?: number | null;
+  id_image_url?: string | null; id_verification_status?: string | null;
+  id_verified_at?: string | null; id_verified_by?: string | null;
+  id_rejected_reason?: string | null;
+}
+
+interface StaffRow {
+  id: string; name: string; email: string; password?: string | null;
+  role?: string | null; created_at?: string | null;
+  ship_type?: string | null; ship_id?: string | null;
+}
+
+interface StaffRpcRow {
+  id: string; name: string; email: string; role?: string | null;
+  created_at?: string | null; ship_type?: string | null;
+  ship_id?: string | string[] | null;
+}
+
+interface SystemLogRow {
+  id: string; action: string; details: string;
+  performer_id?: string | null; performer_name?: string | null;
+  role?: string | null; created_at: string;
+}
+
+export interface ShipRow {
+  id?: string; name?: string | null; type?: Ship["type"] | null; route?: string | null;
+  departure?: string | null; arrival?: string | null; date?: string | null;
+  price?: number | null; total_seats?: number | null; image_url?: string | null;
+  image?: string | null; schedule_days?: string | null; is_active?: boolean | null;
+  is_confirmed?: boolean | null; stops?: string | null; total_bunks?: number | null;
+  cancelled_dates?: string[] | null; requester_id?: string | null; requester_name?: string | null;
+}
+
+interface SeatRow {
+  id?: string; label?: string | null; type?: Seat["type"] | null;
+  row_num?: number | null; col_num?: number | null; status?: Seat["status"] | null;
+}
+
+interface SeatInsert {
+  id: string; ship_id: string; label: string;
+  type: "seat" | "bunk-lower" | "bunk-upper";
+  row_num: number; col_num: number; status: Seat["status"];
+}
+
+interface ScanRecordRow {
+  id: string; booking_id: string; passenger_name: string;
+  passenger_type: string; seat_label: string; ship_name: string;
+  scanned_at: string; is_duplicate?: boolean | null;
+  staff_id?: string | null; staff_name?: string | null;
+}
+
+interface ManifestHistoryRow {
+  id: string; ship_id: string; ship_name: string;
+  trip_date: string; archived_at: string; bookings: Booking[];
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function signUp(email: string, password: string, name: string) {
+export async function signUp(email: string, password: string, name: string): Promise<{ fallbackSignIn?: boolean; user: User | null; session: Session | null }> {
   const { data, error } = await supabase.auth.signUp({
     email, password, options: { data: { full_name: name } },
   });
   if (error) {
     // If Supabase already has this email (e.g. from a prior attempt), try signing in instead.
     if (error.message?.includes("already registered") || error.message?.includes("already been registered")) {
-      return { fallbackSignIn: true } as any;
+      return { fallbackSignIn: true, user: null, session: null };
     }
     throw error;
   }
@@ -222,9 +288,9 @@ export async function sendIprogSMS(phone: string, message: string) {
     
     const data = await res.json();
     return data;
-  } catch (err: any) {
+  } catch (err) {
     console.error("iProg Catch Error:", err);
-    throw new Error(err.message || "Phone number might be invalid or network error.");
+    throw new Error(err instanceof Error ? err.message : "Phone number might be invalid or network error.");
   }
 }
 const MAILTRAP_TOKEN = import.meta.env.VITE_MAILTRAP_TOKEN as string;
@@ -253,9 +319,9 @@ export async function sendMailtrapEmail(email: string, name: string, subject: st
     }
 
     return await res.json();
-  } catch (err: any) {
+  } catch (err) {
     console.error("Mailtrap Catch Error:", err);
-    throw new Error(err.message || "Email delivery failed.");
+    throw new Error(err instanceof Error ? err.message : "Email delivery failed.");
   }
 }
 
@@ -346,9 +412,9 @@ export async function sendEmailjsOTP(email: string, otp: string, templateId?: st
     console.log("EmailJS Success: OTP sent successfully.");
     
     return true;
-  } catch (err: any) {
+  } catch (err) {
     console.error("EmailJS Catch Error:", err);
-    throw new Error(err.message || "Email delivery failed.");
+    throw new Error(err instanceof Error ? err.message : "Email delivery failed.");
   }
 }
 
@@ -360,7 +426,7 @@ export async function getCurrentUser() {
   return data?.user ?? null;
 }
 
-export async function onAuthStateChange(callback: (user: any) => void) {
+export async function onAuthStateChange(callback: (user: User | null) => void) {
   return supabase.auth.onAuthStateChange((_event, session) => {
     callback(session?.user ?? null);
   });
@@ -374,7 +440,7 @@ export async function onAuthStateChange(callback: (user: any) => void) {
  * back to the legacy table queries. After the migration, RLS denies the legacy
  * table access and only the RPC path works.
  */
-function isMissingFunctionError(error: any): boolean {
+function isMissingFunctionError(error: { code?: string; message?: string } | null | undefined): boolean {
   return (
     error?.code === "PGRST202" ||
     /could not find the function/i.test(error?.message || "") ||
@@ -382,15 +448,15 @@ function isMissingFunctionError(error: any): boolean {
   );
 }
 
-function staffFromRpc(r: any): Staff {
+function staffFromRpc(r: StaffRpcRow): Staff {
   return {
     id: r.id,
     name: r.name,
     email: r.email,
     password: "",
     role: (r.role as StaffRole) || "scanner",
-    createdAt: r.created_at,
-    shipType: r.ship_type,
+    createdAt: r.created_at || "",
+    shipType: r.ship_type || undefined,
     shipIds: r.ship_id ? String(r.ship_id).split(",").map((id: string) => id.trim()).filter(Boolean) : [],
   };
 }
@@ -431,22 +497,22 @@ export async function getStaffList(shipType?: string): Promise<Staff[]> {
   if (!isMissingFunctionError(error)) throw error;
 
   // Legacy fallback (pre-migration).
-  let query = supabase.from("staff").select("*").order("created_at", { ascending: false });
-  if (shipType) query = (query as any).eq("ship_type", shipType);
-  const { data: legacyData, error: legacyError } = await query;
+  const baseQuery = () => supabase.from("staff").select("*").order("created_at", { ascending: false });
+  const { data: legacyData, error: legacyError } =
+    shipType ? await baseQuery().eq("ship_type", shipType) : await baseQuery();
   if (legacyError) throw legacyError;
   return legacyData.map(dbToStaff);
 }
 
-function dbToStaff(s: any): Staff {
+function dbToStaff(s: StaffRow): Staff {
   return { 
     id: s.id, 
     name: s.name, 
     email: s.email, 
-    password: s.password, 
+    password: s.password || "", 
     role: (s.role as StaffRole) || "scanner", 
-    createdAt: s.created_at, 
-    shipType: s.ship_type, 
+    createdAt: s.created_at || "", 
+    shipType: s.ship_type || undefined, 
     shipIds: s.ship_id ? s.ship_id.split(",").map((id: string) => id.trim()).filter(Boolean) : []
   };
 }
@@ -517,7 +583,7 @@ export async function updateStaff(id: string, updates: {
 
   if (error) {
     // Legacy fallback (pre-migration).
-    const dbUpdates: any = {};
+    const dbUpdates: Partial<Pick<StaffRow, "name" | "email" | "password" | "role">> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.email !== undefined) dbUpdates.email = updates.email;
     if (updates.password !== undefined) dbUpdates.password = updates.password;
@@ -556,9 +622,13 @@ export async function addSystemLog(action: string, details: string, performedBy:
 
   const staffJson = sessionStorage.getItem("scanStaff") || sessionStorage.getItem("adminStaff");
   if (staffJson) {
-    const staff = JSON.parse(staffJson);
-    performerName = staff.name;
-    performerRole = staff.role;
+    try {
+      const staff = JSON.parse(staffJson);
+      performerName = staff.name;
+      performerRole = staff.role;
+    } catch {
+      // Corrupt session data — fall back to the provided performer name.
+    }
   }
 
   const { error } = await supabase.from("system_logs").insert({
@@ -579,13 +649,13 @@ export async function deleteSystemLog(id: string): Promise<void> {
 export async function getSystemLogs(): Promise<SystemLog[]> {
   const { data, error } = await supabase.from("system_logs").select("*").order("created_at", { ascending: false }).limit(100);
   if (error) throw error;
-  return data.map((l: any) => ({
+  return data.map((l: SystemLogRow) => ({
     id: l.id,
     action: l.action,
     details: l.details,
     performedBy: l.performer_id || "System",
-    performedByName: l.performer_name,
-    role: l.role as StaffRole,
+    performedByName: l.performer_name || "Unknown",
+    role: (l.role as StaffRole) || "scanner",
     createdAt: l.created_at
   }));
 }
@@ -607,15 +677,21 @@ export async function generateSeatsForShip(
   // Existing seats (id + status) so blocked/status state is preserved across regen
   const { data: existingRows } = await supabase
     .from("seats").select("id, status").eq("ship_id", shipId);
-  const existingStatus = new Map((existingRows || []).map((r: any) => [r.id, r.status]));
+  const existingStatus = new Map(
+    (existingRows || []).map((r: { id: string; status: Seat["status"] }) => [r.id, r.status] as const)
+  );
   const existingIds = new Set(existingStatus.keys());
 
   // Seat ids currently referenced by bookings — these can never be hard-deleted
   const { data: refRows } = await supabase
     .from("bookings").select("seat_id").eq("ship_id", shipId).not("seat_id", "is", null);
-  const referencedIds = new Set((refRows || []).map((r: any) => r.seat_id));
+  const referencedIds = new Set(
+    (refRows || [])
+      .map((r: { seat_id: string | null }) => r.seat_id)
+      .filter((id): id is string => id !== null)
+  );
 
-  const rows: any[] = [];
+  const rows: SeatInsert[] = [];
 
   // ── Regular seats (4 per row: cols 1-4) ──
   const seatRows = Math.ceil(totalSeats / 4);
@@ -693,11 +769,11 @@ export async function addShip(ship: {
   name: string; type: "ferry" | "pumpboat" | "fastcraft" | "roro"; route: string;
   departure: string; arrival: string; price: number;
   totalSeats: number; totalBunks?: number; scheduleDays: string; 
-  imageUrl?: string; stops?: string; isConfirmed?: boolean;
+  imageUrl?: string; stops?: string | unknown[]; isConfirmed?: boolean;
   requesterId?: string; requesterName?: string;
 }): Promise<string> {
   const shipId = generateId();
-  const insertData: any = {
+  const insertData = {
     id: shipId,
     name: ship.name, type: ship.type, route: ship.route,
     departure: ship.departure, arrival: ship.arrival,
@@ -723,9 +799,9 @@ export async function addShip(ship: {
     // Auto-generate seat rows
     await generateSeatsForShip(data.id, ship.totalSeats, ship.totalBunks || 0);
     return data.id;
-  } catch (err: any) {
+  } catch (err) {
     console.error("Critical Connection Error in addShip:", err);
-    if (err.message === 'Failed to fetch') {
+    if (err instanceof Error && err.message === 'Failed to fetch') {
       throw new Error("Network Error: Could not reach Supabase. Please check your internet or Supabase project status.");
     }
     throw err;
@@ -793,7 +869,7 @@ export async function updateShip(id: string, updates: {
   name?: string; route?: string; departure?: string; arrival?: string;
   price?: number; totalSeats?: number; totalBunks?: number; scheduleDays?: string; stops?: string; imageUrl?: string;
 }): Promise<void> {
-  const dbUpdates: any = {};
+  const dbUpdates: Record<string, string | number> = {};
   if (updates.name !== undefined) dbUpdates.name = updates.name;
   if (updates.route !== undefined) dbUpdates.route = updates.route;
   if (updates.departure !== undefined) dbUpdates.departure = updates.departure;
@@ -811,16 +887,13 @@ export async function updateShip(id: string, updates: {
 // ─── Ships ────────────────────────────────────────────────────────────────────
 
 export async function getShips(onlyConfirmed: boolean = false): Promise<Ship[]> {
-  let query = supabase.from("ships").select("*").order("name", { ascending: true });
-  if (onlyConfirmed) {
-    query = (query as any).eq("is_confirmed", true);
-  }
-  const { data, error } = await query;
+  const baseQuery = () => supabase.from("ships").select("*").order("name", { ascending: true });
+  const { data, error } = onlyConfirmed ? await baseQuery().eq("is_confirmed", true) : await baseQuery();
   if (error) throw error;
   
   // Filter out any "soft-deleted" or hidden ships
-  return data
-    .filter((row: any) => !row.name.startsWith("[DEL]"))
+  return (data || [])
+    .filter((row: ShipRow) => !(row.name || "").startsWith("[DEL]"))
     .map(dbToShip);
 }
 
@@ -836,7 +909,7 @@ export async function confirmShip(id: string): Promise<void> {
   if (shipData?.requester_id) {
     const { data: staffData } = await supabase.from("staff").select("ship_id").eq("id", shipData.requester_id).single();
     if (staffData) {
-      let currentIds = staffData.ship_id ? staffData.ship_id.split(",").map((s: string) => s.trim()) : [];
+      const currentIds = staffData.ship_id ? staffData.ship_id.split(",").map((s: string) => s.trim()) : [];
       if (!currentIds.includes(id)) {
         currentIds.push(id);
         const newIdsStr = currentIds.filter(Boolean).join(",");
@@ -855,17 +928,17 @@ export async function getShipById(id: string): Promise<Ship | null> {
   return dbToShip(data);
 }
 
-function dbToShip(row: any): Ship {
+function dbToShip(row: ShipRow): Ship {
   return {
-    id: row.id, name: row.name, type: row.type, route: row.route,
-    departure: row.departure, arrival: row.arrival, date: row.date,
-    price: row.price, totalSeats: row.total_seats, image: row.image_url || row.image,
-    scheduleDays: row.schedule_days, isActive: row.is_active, 
-    isConfirmed: row.is_confirmed,
-    stops: row.stops, totalBunks: row.total_bunks,
-    cancelled_dates: row.cancelled_dates || [],
-    requester_id: row.requester_id,
-    requester_name: row.requester_name,
+    id: row.id ?? "", name: row.name ?? "", type: row.type ?? "ferry", route: row.route ?? "",
+    departure: row.departure ?? "", arrival: row.arrival ?? "", date: row.date ?? "",
+    price: row.price ?? 0, totalSeats: row.total_seats ?? 0, image: row.image_url || row.image || "",
+    scheduleDays: row.schedule_days ?? undefined, isActive: row.is_active ?? undefined, 
+    isConfirmed: row.is_confirmed ?? undefined,
+    stops: row.stops ?? undefined, totalBunks: row.total_bunks ?? undefined,
+    cancelled_dates: row.cancelled_dates ?? [],
+    requester_id: row.requester_id ?? undefined,
+    requester_name: row.requester_name ?? undefined,
   };
 }
 
@@ -1055,16 +1128,19 @@ export async function expireStalePendingBookings(): Promise<number> {
     if (error) throw error;
 
     const staleIds = (data || [])
-      .filter((b: any) => {
+      .filter((b: Pick<BookingRow, "id" | "status" | "created_at"> & {
+        id_verified_at?: string | null; counter_deadline?: string | null;
+        id_verification_status?: string | null;
+      }) => {
         if (b.status === "counter") {
-          return getCounterDeadline({ counterDeadline: b.counter_deadline, createdAt: b.created_at }).getTime() <= Date.now();
+          return getCounterDeadline({ counterDeadline: b.counter_deadline ?? undefined, createdAt: b.created_at }).getTime() <= Date.now();
         }
         // Discount bookings awaiting ID verification aren't payable yet — their
         // payment window starts when the admin approves (id_verified_at).
         if (b.id_verification_status === "pending") return false;
-        return getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now();
+        return getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at ?? undefined }).getTime() <= Date.now();
       })
-      .map((b: any) => b.id);
+      .map((b: { id: string }) => b.id);
 
     if (staleIds.length === 0) return 0;
 
@@ -1076,8 +1152,8 @@ export async function expireStalePendingBookings(): Promise<number> {
 
     console.log(`[expireStalePendingBookings] Marked ${staleIds.length} booking(s) as expired.`);
     return staleIds.length;
-  } catch (err: any) {
-    console.error("[expireStalePendingBookings] Error:", err.message);
+  } catch (err) {
+    console.error("[expireStalePendingBookings] Error:", err instanceof Error ? err.message : err);
     return 0;
   }
 }
@@ -1117,7 +1193,7 @@ export async function getSeatsForShipAndDate(
   if (bookingData && bookingData.length > 0) {
     // To check overlaps correctly, we need the stop order for this ship
     const { data: shipData } = await supabase.from("ships").select("stops, route").eq("id", shipId).single();
-    const stops = shipData ? getShipStops({ ...shipData } as any) : [];
+    const stops = shipData ? getShipStops(dbToShip(shipData)) : [];
     const stopMap = new Map(stops.map((s, i) => [s.location, i]));
 
     const newStart = boardStop ? stopMap.get(boardStop) : undefined;
@@ -1154,15 +1230,15 @@ export async function getSeatsForShipAndDate(
     }
   }
 
-  return seatData.map((row: any) => {
+  return seatData.map((row: SeatRow) => {
     const base = dbToSeat(row);
     if (base.status === "blocked") return base; // admin-blocked stays blocked
-    return { ...base, status: takenSeatIds.has(row.id) ? "booked" : "available" };
+    return { ...base, status: takenSeatIds.has(base.id) ? ("booked" as const) : ("available" as const) };
   });
 }
 
-function dbToSeat(row: any): Seat {
-  return { id: row.id, label: row.label, type: row.type, row: row.row_num, col: row.col_num, status: row.status };
+function dbToSeat(row: SeatRow): Seat {
+  return { id: row.id ?? "", label: row.label ?? "", type: row.type ?? "seat", row: row.row_num ?? 0, col: row.col_num ?? 0, status: row.status ?? "available" };
 }
 
 export async function updateSeatStatus(seatId: string, status: Seat["status"]): Promise<void> {
@@ -1229,7 +1305,7 @@ export async function getBookingByQrCode(qrCode: string): Promise<Booking | null
  * reservation's QR lets staff confirm the whole group at once.
  * Returns raw DB rows (snake_case), excluding the given booking, status counter.
  */
-export async function getBookingSiblings(booking: { id: string; shipId?: string; tripDate?: string; createdAt?: string }): Promise<any[]> {
+export async function getBookingSiblings(booking: { id: string; shipId?: string; tripDate?: string; createdAt?: string }): Promise<BookingRow[]> {
   if (!booking.shipId || !booking.tripDate || !booking.createdAt) return [];
   const { data, error } = await supabase
     .from("bookings")
@@ -1244,25 +1320,25 @@ export async function getBookingSiblings(booking: { id: string; shipId?: string;
   return data || [];
 }
 
-export function dbToBooking(row: any): Booking {
+export function dbToBooking(row: BookingRow): Booking {
   return {
     id: row.id, shipId: row.ship_id, seatId: row.seat_id, seatLabel: row.seat_label,
-    passengerName: row.passenger_name, passengerType: row.passenger_type,
-    phone: row.phone, email: row.email || undefined, status: row.status, qrCode: row.qr_code,
-    createdAt: row.created_at, userId: row.user_id,
+    passengerName: row.passenger_name, passengerType: (row.passenger_type as Booking["passengerType"]) || "regular",
+    phone: row.phone, email: row.email || undefined, status: row.status, qrCode: row.qr_code || "",
+    createdAt: row.created_at, userId: row.user_id || undefined,
     counterDeadline: row.counter_deadline || undefined,
-    accommodationType: row.accommodation_type,
-    tripDate: row.trip_date,
-    boardStop: row.board_stop,
-    alightStop: row.alight_stop,
-    legPrice: row.leg_price,
-    idVerified: row.is_id_verified,
-    verificationScore: row.verification_score,
-    idImageUrl: row.id_image_url,
-    idVerificationStatus: row.id_verification_status || "none",
-    idVerifiedAt: row.id_verified_at,
-    idVerifiedBy: row.id_verified_by,
-    idRejectedReason: row.id_rejected_reason,
+    accommodationType: (row.accommodation_type as Booking["accommodationType"]) || undefined,
+    tripDate: row.trip_date || undefined,
+    boardStop: row.board_stop || undefined,
+    alightStop: row.alight_stop || undefined,
+    legPrice: row.leg_price ?? undefined,
+    idVerified: row.is_id_verified ?? undefined,
+    verificationScore: row.verification_score ?? undefined,
+    idImageUrl: row.id_image_url || undefined,
+    idVerificationStatus: (row.id_verification_status as Booking["idVerificationStatus"]) || "none",
+    idVerifiedAt: row.id_verified_at || undefined,
+    idVerifiedBy: row.id_verified_by || undefined,
+    idRejectedReason: row.id_rejected_reason || undefined,
   };
 }
 
@@ -1312,7 +1388,7 @@ export async function saveBooking(booking: Booking): Promise<void> {
 }
 
 export async function updateBooking(id: string, updates: Partial<Booking>): Promise<void> {
-  const dbUpdates: any = {};
+  const dbUpdates: { status?: Booking["status"]; seat_label?: string; counter_deadline?: string | null } = {};
   if (updates.status !== undefined) dbUpdates.status = updates.status;
   if (updates.seatLabel) dbUpdates.seat_label = updates.seatLabel;
   if (updates.counterDeadline !== undefined) dbUpdates.counter_deadline = updates.counterDeadline;
@@ -1351,19 +1427,18 @@ export async function deleteBooking(id: string): Promise<void> {
  * Get scan history for a specific staff member only.
  */
 export async function getScanHistory(staffId?: string): Promise<ScanRecord[]> {
-  let query = supabase.from("scan_records").select("*").order("scanned_at", { ascending: false });
-  if (staffId) query = (query as any).eq("staff_id", staffId);
-  const { data, error } = await query;
+  const baseQuery = () => supabase.from("scan_records").select("*").order("scanned_at", { ascending: false });
+  const { data, error } = staffId ? await baseQuery().eq("staff_id", staffId) : await baseQuery();
   if (error) throw error;
   return data.map(dbToScanRecord);
 }
 
-function dbToScanRecord(row: any): ScanRecord {
+function dbToScanRecord(row: ScanRecordRow): ScanRecord {
   return {
     id: row.id, bookingId: row.booking_id, passengerName: row.passenger_name,
     passengerType: row.passenger_type, seatLabel: row.seat_label,
-    shipName: row.ship_name, scannedAt: row.scanned_at, isDuplicate: row.is_duplicate,
-    staffId: row.staff_id, staffName: row.staff_name,
+    shipName: row.ship_name, scannedAt: row.scanned_at, isDuplicate: !!row.is_duplicate,
+    staffId: row.staff_id || undefined, staffName: row.staff_name || undefined,
   };
 }
 
@@ -1412,7 +1487,11 @@ export async function updateIDVerificationStatus(
   reason?: string,
   adminId?: string
 ): Promise<void> {
-  const updates: any = { 
+  const updates: {
+    id_verification_status: string; is_id_verified: boolean;
+    id_verified_at: string | null; id_verified_by: string | null;
+    id_rejected_reason: string | null; passenger_type?: string;
+  } = { 
     id_verification_status: status,
     is_id_verified: isVerified,
     id_verified_at: status === "verified" ? new Date().toISOString() : null,
@@ -1500,9 +1579,9 @@ export async function getManifestHistory(): Promise<ManifestHistory[]> {
   const { data, error } = await supabase.from("manifest_history").select("*")
     .order("archived_at", { ascending: false });
   if (error) throw error;
-  return data.map((row: any) => ({
+  return data.map((row: ManifestHistoryRow) => ({
     id: row.id, shipId: row.ship_id, shipName: row.ship_name,
-    tripDate: row.trip_date, archivedAt: row.archived_at, bookings: row.bookings,
+    tripDate: row.trip_date, archivedAt: row.archived_at, bookings: row.bookings || [],
   }));
 }
 
@@ -1548,7 +1627,7 @@ export async function autoArchivePastManifests(ships: Ship[]): Promise<void> {
     const { data } = await supabase.from("bookings").select("trip_date")
       .eq("ship_id", ship.id).in("status", ["paid", "boarded"]).lt("trip_date", today);
     if (!data) continue;
-    const dates = [...new Set(data.map((r: any) => r.trip_date).filter(Boolean))];
+    const dates = [...new Set(data.map((r: { trip_date: string | null }) => r.trip_date).filter((d): d is string => !!d))];
     for (const date of dates) {
       await archiveManifestForDate(ship.id, ship.name, date);
     }
@@ -1635,7 +1714,7 @@ export async function cancelShipDate(shipId: string, date: string, reason: strin
     .in("status", ["paid", "pending", "counter"]);
 
   if (affectedBookings && affectedBookings.length > 0) {
-    const bookingIds = affectedBookings.map((b: any) => b.id);
+    const bookingIds = affectedBookings.map((b: { id: string }) => b.id);
     await supabase.from("bookings").update({ status: "cancelled" }).in("id", bookingIds);
 
     for (const b of affectedBookings) {
@@ -1651,7 +1730,7 @@ export async function submitReview(review: {
   passengerName: string;
   rating: number;
   comment?: string;
-  surveyData?: any;
+  surveyData?: Record<string, string>;
 }): Promise<void> {
   const { error } = await supabase.from("reviews").insert({
     booking_id: review.bookingId,
@@ -1663,6 +1742,24 @@ export async function submitReview(review: {
   if (error) throw error;
 }
 
+interface ReviewRow {
+  id: string; booking_id?: string | null; passenger_name: string;
+  rating: number; comment?: string | null;
+  survey_data?: Record<string, string> | null; created_at: string;
+}
+
+function toReview(r: ReviewRow): Review {
+  return {
+    id: r.id,
+    bookingId: r.booking_id ?? null,
+    passengerName: r.passenger_name,
+    rating: r.rating,
+    comment: r.comment || "",
+    surveyData: r.survey_data ?? null,
+    createdAt: r.created_at,
+  };
+}
+
 export async function getReviews(): Promise<Review[]> {
   const { data, error } = await supabase
     .from("reviews")
@@ -1671,15 +1768,7 @@ export async function getReviews(): Promise<Review[]> {
 
   if (error) throw error;
 
-  return data.map((r: any) => ({
-    id: r.id,
-    bookingId: r.booking_id,
-    passengerName: r.passenger_name,
-    rating: r.rating,
-    comment: r.comment,
-    surveyData: r.survey_data,
-    createdAt: r.created_at,
-  }));
+  return data.map(toReview);
 }
 
 export async function getReviewsByShip(shipId: string): Promise<Review[]> {
@@ -1693,15 +1782,7 @@ export async function getReviewsByShip(shipId: string): Promise<Review[]> {
 
     if (error) throw error;
 
-    return data.map((r: any) => ({
-      id: r.id,
-      bookingId: r.booking_id,
-      passengerName: r.passenger_name,
-      rating: r.rating,
-      comment: r.comment,
-      surveyData: r.survey_data,
-      createdAt: r.created_at,
-    }));
+    return data.map(toReview);
   } catch (err) {
     console.error("Join fetch for reviews failed, using manual filter:", err);
     // Manual fallback: Get all reviews and correlate (less efficient but safe)

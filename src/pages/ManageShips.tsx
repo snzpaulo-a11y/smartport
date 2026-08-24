@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, memo } from "react";
+﻿import { useState, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { supabase, cancelShipDate, generateSeatsForShip } from "@/lib/store";
+import { supabase, cancelShipDate, generateSeatsForShip, ShipRow as ShipRowData } from "@/lib/store";
 import {
   ArrowLeft, Plus, Pencil, Trash2, X, Save, Loader2, AlertTriangle,
   Ship as ShipIcon, Sailboat, ChevronRight, ChevronDown, Power, ShieldAlert
@@ -83,44 +83,45 @@ const ManageShips = () => {
     seatRows: 8, seatCols: 4, bunkRows: 2, bunkCols: 4,
   };
 
-  const [ships, setShips] = useState<any[]>([]);
+  const [ships, setShips] = useState<ShipRowData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingShip, setEditingShip] = useState<any | null>(null);
+  const [editingShip, setEditingShip] = useState<ShipRowData | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [expandedSection, setExpandedSection] = useState("basic");
 
-  const [cancellingShip, setCancellingShip] = useState<any | null>(null);
+  const [cancellingShip, setCancellingShip] = useState<ShipRowData | null>(null);
   const [cancelDate, setCancelDate] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
   const fetchShips = async () => {
     setLoading(true);
-    let query = supabase.from("ships").select("*").order("name");
-    
-    // Filter by type if applicable
-    if (allowedType !== "all") {
-      query = (query as any).eq("type", allowedType);
-    }
+    const base = () => supabase.from("ships").select("*").order("name");
+    const filterByType = allowedType !== "all";
+    const restricted = adminRole !== "super_admin";
+    const assignedIds = adminStaff.ship_id ? String(adminStaff.ship_id).split(",").map((id: string) => id.trim()) : [];
 
-    // STRICT FILTERING: If not super_admin, only show assigned ships
-    if (adminRole !== "super_admin") {
-      const assignedIds = adminStaff.ship_id ? adminStaff.ship_id.split(",").map((id: string) => id.trim()) : [];
-      if (assignedIds.length > 0) {
-        query = (query as any).in("id", assignedIds);
-      } else {
+    let data: ShipRowData[] | null = null;
+    if (filterByType && restricted && assignedIds.length > 0) {
+      ({ data } = await base().eq("type", allowedType).in("id", assignedIds));
+    } else if (filterByType) {
+      ({ data } = await base().eq("type", allowedType));
+    } else if (restricted) {
+      if (assignedIds.length === 0) {
         // If no ships assigned, show nothing for safer security
         setShips([]);
         setLoading(false);
         return;
       }
+      ({ data } = await base().in("id", assignedIds));
+    } else {
+      ({ data } = await base());
     }
 
-    const { data } = await query;
     setShips(data || []);
     setLoading(false);
   };
@@ -138,13 +139,13 @@ const ManageShips = () => {
     setForm((f) => ({ ...f, scheduleDays: f.scheduleDays.includes(day) ? f.scheduleDays.filter((d) => d !== day) : [...f.scheduleDays, day] })), []);
 
   const openAdd = () => { setEditingShip(null); setForm(emptyForm); setError(""); setExpandedSection("basic"); setShowModal(true); };
-  const openEdit = (ship: any) => {
+  const openEdit = (ship: ShipRowData) => {
     setEditingShip(ship);
     let stops: Stop[] = [];
-    try { stops = ship.stops ? JSON.parse(ship.stops) : []; } catch {}
+    try { stops = ship.stops ? JSON.parse(ship.stops) : []; } catch { /* stops column not JSON */ }
     if (stops.length < 2) stops = [
-      { location: ship.route?.split("→")[0]?.trim() || "", arrival: "", departure: ship.departure, price: 0 },
-      { location: ship.route?.split("→").pop()?.trim() || "", arrival: ship.arrival, departure: "", price: ship.price },
+      { location: ship.route?.split("→")[0]?.trim() || "", arrival: "", departure: ship.departure || "", price: 0 },
+      { location: ship.route?.split("→").pop()?.trim() || "", arrival: ship.arrival || "", departure: "", price: ship.price || 0 },
     ];
     // Rebuild the layout controls from the ship's real capacity so saving an
     // edit never silently resets the seat/bunk layout to defaults.
@@ -189,19 +190,19 @@ const ManageShips = () => {
     setSaving(false); setShowModal(false); fetchShips();
   };
 
-  const handleDelete = async (ship: any) => {
+  const handleDelete = async (ship: ShipRowData) => {
     if (!confirm(`Delete "${ship.name}"?`)) return;
-    setDeletingId(ship.id);
+    setDeletingId(ship.id!);
     await supabase.from("ships").delete().eq("id", ship.id);
     setDeletingId(null); fetchShips();
   };
 
-  const toggleActive = async (ship: any) => {
+  const toggleActive = async (ship: ShipRowData) => {
     await supabase.from("ships").update({ is_active: !ship.is_active }).eq("id", ship.id);
     fetchShips();
   };
 
-  const openCancelModal = (ship: any) => {
+  const openCancelModal = (ship: ShipRowData) => {
     setCancellingShip(ship);
     setCancelDate(new Date().toISOString().split("T")[0]);
     setCancelReason("");
@@ -420,7 +421,13 @@ const ManageShips = () => {
   );
 };
 
-const ShipRow = memo(({ ship, index, onEdit, onDelete, onToggleActive, deletingId, onCancelTrip }: any) => {
+interface ShipRowProps {
+  ship: ShipRowData; index: number; deletingId: string | null;
+  onEdit: (ship: ShipRowData) => void; onDelete: (ship: ShipRowData) => void;
+  onToggleActive: (ship: ShipRowData) => void; onCancelTrip: (ship: ShipRowData) => void;
+}
+
+const ShipRow = memo(({ ship, index, onEdit, onDelete, onToggleActive, deletingId, onCancelTrip }: ShipRowProps) => {
   const days = ship.schedule_days?.split(",") || [];
   const allDays = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   return (

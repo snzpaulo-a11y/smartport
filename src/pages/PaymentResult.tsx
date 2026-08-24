@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase, deleteBooking, getCurrentUser } from "@/lib/store";
+import { supabase, deleteBooking, getCurrentUser, BookingRow } from "@/lib/store";
 import { CheckCircle, XCircle, Loader2, Ticket, Lock } from "lucide-react";
 
 const PaymentResult = () => {
@@ -11,7 +11,7 @@ const PaymentResult = () => {
   const status = searchParams.get("status");
 
   const [verifying, setVerifying] = useState(true);
-  const [booking, setBooking] = useState<any>(null);
+  const [booking, setBooking] = useState<(BookingRow & { price?: number | null }) | null>(null);
   const [denied, setDenied] = useState(false);
 
   useEffect(() => {

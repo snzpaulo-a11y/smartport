@@ -5,7 +5,7 @@ import { Star, X, CheckCircle2, ChevronRight, MessageSquare } from "lucide-react
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (rating: number, surveyData: any, comment: string) => void;
+  onSubmit: (rating: number, surveyData: Record<string, string>, comment: string) => void;
   passengerName: string;
 }
 
@@ -19,7 +19,7 @@ export default function FeedbackModal({ isOpen, onClose, onSubmit, passengerName
   const [step, setStep] = useState<"rating" | "survey" | "thanks">("rating");
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [surveyData, setSurveyData] = useState<any>({});
+  const [surveyData, setSurveyData] = useState<Record<string, string>>({});
   const [comment, setComment] = useState("");
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -93,7 +93,7 @@ export default function LoginPage() {
             .eq("email", recoveryIdentifier)
             .maybeSingle();
           if (profile && !error) isRegistered = true;
-        } catch (e) {}
+        } catch (e) { /* table may not exist */ }
 
         if (!isRegistered) {
           try {
@@ -104,7 +104,7 @@ export default function LoginPage() {
               .limit(1)
               .maybeSingle();
             if (booking && !error) isRegistered = true;
-          } catch (e) {}
+          } catch (e) { /* table may not exist */ }
         }
 
         // Always allow proceeding as profiles table is not present in schema cache
@@ -139,7 +139,7 @@ export default function LoginPage() {
             .eq("email", shadowEmail)
             .maybeSingle();
           if (profile && !error) isRegistered = true;
-        } catch (e) {}
+        } catch (e) { /* table may not exist */ }
 
         if (!isRegistered) {
           try {
@@ -150,7 +150,7 @@ export default function LoginPage() {
               .limit(1)
               .maybeSingle();
             if (booking && !error) isRegistered = true;
-          } catch (e) {}
+          } catch (e) { /* table may not exist */ }
         }
 
         isRegistered = true;
@@ -171,8 +171,8 @@ export default function LoginPage() {
         }
         setActiveView("otp_forgot");
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -253,8 +253,8 @@ export default function LoginPage() {
         }, 2500);
       }
 
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -342,7 +342,7 @@ export default function LoginPage() {
               await sendIprogSMS(phone, `Your SmartPort Registration OTP is: ${newOtp}`);
               setError("Verification code sent! Please check your SMS.");
             }
-          } catch (apiErr: any) {
+          } catch (apiErr) {
             console.warn("OTP delivery failed, showing screen fallback:", apiErr);
             setError(`[Demo Mode] OTP Service Offline. Use code: ${newOtp} to register.`);
           }
@@ -369,8 +369,8 @@ export default function LoginPage() {
 
       }
 
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }

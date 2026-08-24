@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getShipStops, calcLegPrice, Stop, isStopDeparted, getLocalDate, getNextLocalDate, isDayOnSchedule, isOperatingToday, isLegOperating, getLegScheduleDays, getScheduleDays } from "@/lib/store";
+import { getShipById, getShipStops, calcLegPrice, Stop, Ship, isStopDeparted, getLocalDate, getNextLocalDate, isDayOnSchedule, isOperatingToday, isLegOperating, getLegScheduleDays, getScheduleDays } from "@/lib/store";
 import { ArrowLeft, MapPin, ChevronRight, ChevronLeft, Loader2, Calendar, Clock, ChevronDown, Check, Anchor, X } from "lucide-react";
 
 const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -31,7 +31,7 @@ const LegSelector = () => {
 
   const [tripDate, setTripDate] = useState(_initDate || getLocalDate());
   const [stops, setStops] = useState<Stop[]>([]);
-  const [ship, setShip] = useState<any>(null);
+  const [ship, setShip] = useState<Ship | null>(null);
 
   const cleanStr = (s: string) => {
     if (!s) return "";
@@ -39,8 +39,8 @@ const LegSelector = () => {
     return words.filter((w, i) => w !== words[i - 1]).join(" ");
   };
 
-  const [boardStop, setBoardStop] = useState((location.state as any)?.boardStop || "");
-  const [alightStop, setAlightStop] = useState((location.state as any)?.alightStop || "");
+  const [boardStop, setBoardStop] = useState((location.state as { boardStop?: string } | null)?.boardStop || "");
+  const [alightStop, setAlightStop] = useState((location.state as { alightStop?: string } | null)?.alightStop || "");
   const [loading, setLoading] = useState(true);
   const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
   const [reserveDate, setReserveDate] = useState(getNextLocalDate());

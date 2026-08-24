@@ -53,8 +53,8 @@ export default function IdentityCenter({ bookingId, onUploadComplete, onClose, p
       const url = await uploadIDImage(bookingId, blob);
       await onUploadComplete(url);
       setStep("success");
-    } catch (err: any) {
-      setError(err.message || "Upload failed. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
       setStep("choice");
     }
   };
@@ -68,8 +68,8 @@ export default function IdentityCenter({ bookingId, onUploadComplete, onClose, p
       const url = await uploadIDImage(bookingId, file);
       await onUploadComplete(url);
       setStep("success");
-    } catch (err: any) {
-      setError(err.message || "Upload failed. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
       setStep("choice");
     }
   };
