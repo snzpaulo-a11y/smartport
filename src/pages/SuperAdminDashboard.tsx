@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { 
-  getStaffList, 
-  getSystemLogs, 
-  deleteStaff, 
-  addStaff, 
+import {
+  getStaffList,
+  getSystemLogs,
+  deleteStaff,
+  addStaff,
   updateStaffShips,
   getShips,
   confirmShip,
@@ -15,11 +15,12 @@ import {
   cancelShipDate,
   updateStaff,
   getReviews,
-  Staff, 
-  SystemLog, 
+  deleteReview,
+  Staff,
+  SystemLog,
   Ship,
   Review,
-  StaffRole 
+  StaffRole
 } from "@/lib/store";
 import {
   LayoutDashboard,
@@ -80,14 +81,14 @@ export default function SuperAdminDashboard() {
   const [newShipModel, setNewShipModel] = useState<{ name: string; type: "ferry" | "pumpboat" | "fastcraft" | "roro"; route: string; departure: string; arrival: string; price: number; totalSeats: number }>({ name: "", type: "ferry", route: "", departure: "", arrival: "", price: 100, totalSeats: 100 });
   const [creatingShip, setCreatingShip] = useState(false);
   const [shipFormMsg, setShipFormMsg] = useState("");
-  
+
   // Audit Search
   const [auditSearch, setAuditSearch] = useState("");
-  
+
   // Admin Editing
   const [showAdminEdit, setShowAdminEdit] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<Staff | null>(null);
-  
+
   // Ship Editing & Cancellation
   const [showShipEdit, setShowShipEdit] = useState(false);
   const [editingShip, setEditingShip] = useState<Ship | null>(null);
@@ -120,10 +121,10 @@ export default function SuperAdminDashboard() {
     try {
       const staffData = await getStaffList();
       setStaff(staffData);
-      
+
       const logsData = await getSystemLogs();
       setLogs(logsData);
-      
+
       const shipsData = await getShips();
       setShips(shipsData);
 
@@ -200,7 +201,7 @@ export default function SuperAdminDashboard() {
       setShipFormMsg("Ship physically instantiated successfully!");
       await fetchData();
       setTimeout(() => setShowShipCreate(false), 1500);
-    } catch(e) {
+    } catch (e) {
       setShipFormMsg(e instanceof Error ? e.message : "Failed to instantiate fleet.");
     } finally {
       setCreatingShip(false);
@@ -257,10 +258,10 @@ export default function SuperAdminDashboard() {
       const adminStaffStr = sessionStorage.getItem("adminStaff");
       if (!adminStaffStr) return;
       const currentStaff = JSON.parse(adminStaffStr);
-      
+
       const { error } = await supabase.from("staff").update({ password: newAdminPass }).eq("id", currentStaff.id);
       if (error) throw error;
-      
+
       setSettingsMsg("Password updated successfully!");
       setNewAdminPass("");
       setTimeout(() => setSettingsMsg(""), 3000);
@@ -285,7 +286,7 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const filteredLogs = logs.filter(l => 
+  const filteredLogs = logs.filter(l =>
     l.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
     l.performedByName.toLowerCase().includes(auditSearch.toLowerCase()) ||
     l.details.toLowerCase().includes(auditSearch.toLowerCase())
@@ -332,7 +333,7 @@ export default function SuperAdminDashboard() {
 
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
-        
+
         {/* Top Header */}
         <header className="h-16 border-b border-white/5 flex items-center justify-end px-8 shrink-0 bg-[#0F1219]">
           <div className="flex items-center gap-4">
@@ -351,11 +352,11 @@ export default function SuperAdminDashboard() {
 
         {/* Content Area */}
         <main className="p-8 max-w-5xl w-full">
-          
+
           {loading ? (
-             <div className="flex items-center justify-center p-20">
-               <div className="w-8 h-8 rounded-full border-2 border-[#3F70FF] border-t-transparent animate-spin" />
-             </div>
+            <div className="flex items-center justify-center p-20">
+              <div className="w-8 h-8 rounded-full border-2 border-[#3F70FF] border-t-transparent animate-spin" />
+            </div>
           ) : (
             <>
               {/* OVERVIEW TAB */}
@@ -450,7 +451,7 @@ export default function SuperAdminDashboard() {
                       Create Admin
                     </button>
                   </div>
-                  
+
                   <div className="bg-[#151A22] border border-white/5 rounded-2xl overflow-hidden">
                     <table className="w-full text-left text-sm">
                       <thead className="bg-[#1A222C] text-[#94A3B8]">
@@ -565,7 +566,7 @@ export default function SuperAdminDashboard() {
                                 <ShieldCheck className="w-4 h-4" /> Approve
                               </button>
                               <button onClick={() => {
-                                if(confirm("Reject and delete this fleet request?")) {
+                                if (confirm("Reject and delete this fleet request?")) {
                                   handleDeleteShip(s.id);
                                 }
                               }} className="flex-1 py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 rounded-lg transition-all text-xs font-bold flex items-center justify-center gap-2">
@@ -577,7 +578,7 @@ export default function SuperAdminDashboard() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Confirmed Fleet */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 px-1">
@@ -628,16 +629,16 @@ export default function SuperAdminDashboard() {
               {/* AUDIT LOG TAB */}
               {activeTab === "audit" && (
                 <div className="space-y-6 animate-in fade-in duration-500">
-                   <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-[1.75rem] font-bold text-[#F8FAFC] tracking-tight">System Audit</h2>
                       <p className="text-[#94A3B8] text-sm mt-1">Immutable record of all administrative actions.</p>
                     </div>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
-                      <input 
-                        type="text" 
-                        placeholder="Search logs..." 
+                      <input
+                        type="text"
+                        placeholder="Search logs..."
                         value={auditSearch}
                         onChange={(e) => setAuditSearch(e.target.value)}
                         className="bg-[#151A22] border border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 w-64"
@@ -698,48 +699,89 @@ export default function SuperAdminDashboard() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="bg-[#151A22] border border-white/5 rounded-2xl px-6 py-3 flex items-center gap-3">
-                         <div className="flex items-center gap-1 text-amber-400">
-                            <StarIcon className="w-5 h-5 fill-current" />
-                            <span className="text-xl font-bold">
-                              {reviews.length > 0 
-                                ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-                                : "0.0"}
-                            </span>
-                         </div>
-                         <div className="h-8 w-px bg-white/5" />
-                         <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-widest leading-none">
-                            <p>Average</p>
-                            <p className="mt-1">Rating</p>
-                         </div>
+                        <div className="flex items-center gap-1 text-amber-400">
+                          <StarIcon className="w-5 h-5 fill-current" />
+                          <span className="text-xl font-bold">
+                            {reviews.length > 0
+                              ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+                              : "0.0"}
+                          </span>
+                        </div>
+                        <div className="h-8 w-px bg-white/5" />
+                        <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-widest leading-none">
+                          <p>Average</p>
+                          <p className="mt-1">Rating</p>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Survey Summary */}
-                  <div className="grid grid-cols-3 gap-6">
-                    {["ease", "clarity", "recommend"].map((qId) => {
-                      const counts: Record<string, number> = {};
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {[
+                      { id: "q1", label: "Q1: Real-time booking & seat reservation", category: "Functional Suitability" },
+                      { id: "q2", label: "Q2: Booking confirmation & digital ticket", category: "Functional Suitability" },
+                      { id: "q3", label: "Q3: QR code generation & gate scan validation", category: "Functional Suitability" },
+                      { id: "q4", label: "Q4: Website load speed & payment flow", category: "Performance Efficiency" },
+                      { id: "q5", label: "Q5: QR scan speed at boarding area", category: "Performance Efficiency" },
+                      { id: "q6", label: "Q6: Cross-browser consistency", category: "Compatibility" },
+                      { id: "q7", label: "Q7: Responsive screen size adaptivity", category: "Compatibility" },
+                      { id: "q8", label: "Q8: Admin payment confirmation & verification", category: "Compatibility" },
+                      { id: "q9", label: "Q9: Clean & intuitive UI navigation", category: "Usability" },
+                      { id: "q10", label: "Q10: Vessel seat selection map usability", category: "Usability" },
+                      { id: "q11", label: "Q11: Error & validation message guidance", category: "Usability" },
+                      { id: "q12", label: "Q12: Double-booking prevention", category: "Reliability" },
+                      { id: "q13", label: "Q13: Graceful error handling", category: "Reliability" },
+                      { id: "q14", label: "Q14: Booking & payment data accuracy", category: "Reliability" },
+                      { id: "q15", label: "Q15: Login & credential security", category: "Security" },
+                      { id: "q16", label: "Q16: Personal info privacy", category: "Security" },
+                      { id: "q17", label: "Q17: QR fraud & duplicate prevention", category: "Security" }
+                    ].map((q) => {
+                      const valueMap: Record<string, number> = {
+                        "Strongly Disagree": 1,
+                        "Disagree": 2,
+                        "Neutral": 3,
+                        "Agree": 4,
+                        "Strongly Agree": 5
+                      };
+
+                      let totalScore = 0;
+                      let answeredCount = 0;
+
                       reviews.forEach(r => {
-                        const val = r.surveyData?.[qId];
-                        if (val) counts[val] = (counts[val] || 0) + 1;
+                        const valStr = r.surveyData?.[q.id];
+                        if (valStr && valueMap[valStr] !== undefined) {
+                          totalScore += valueMap[valStr];
+                          answeredCount += 1;
+                        }
                       });
-                      const topAnswer = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-                      
+
+                      const avg = answeredCount > 0 ? (totalScore / answeredCount) : 0;
+
                       return (
-                        <div key={qId} className="bg-[#151A22] border border-white/5 rounded-2xl p-6">
-                          <p className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-[0.1em] mb-4">
-                            {qId === 'ease' ? 'Booking Experience' : qId === 'clarity' ? 'Information Clarity' : 'Recommendation'}
-                          </p>
-                          {topAnswer ? (
-                            <>
-                              <h4 className="text-lg font-bold text-white mb-1">{topAnswer[0]}</h4>
-                              <p className="text-[#3F70FF] text-xs font-bold uppercase tracking-wider">
-                                {Math.round((topAnswer[1] / reviews.length) * 100)}% of passengers
-                              </p>
-                            </>
-                          ) : (
-                            <p className="text-[#94A3B8] text-sm italic">No data yet</p>
-                          )}
+                        <div key={q.id} className="bg-[#151A22] border border-white/5 rounded-2xl p-4 flex flex-col justify-between">
+                          <div>
+                            <span className="px-2 py-0.5 rounded-full border border-[#3F70FF]/25 text-[#3F70FF] text-[8px] font-bold bg-[#3F70FF]/5 uppercase tracking-widest leading-none">
+                              {q.category}
+                            </span>
+                            <h4 className="text-xs font-bold text-white mt-2.5 leading-snug line-clamp-2">{q.label}</h4>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-white/5">
+                            <div className="flex items-end justify-between">
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-xl font-extrabold text-[#F8FAFC]">{avg > 0 ? avg.toFixed(2) : "0.00"}</span>
+                                <span className="text-[10px] text-[#94A3B8] font-semibold">/ 5.0</span>
+                              </div>
+                              <span className="text-[8px] text-[#94A3B8]/60 font-medium">
+                                {answeredCount} response{answeredCount !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-2 text-[9px] text-[#94A3B8]/50 font-semibold">
+                              <span>Total Score: <span className="text-white/70">{totalScore}</span></span>
+                              <span>|</span>
+                              <span>Sum: <span className="text-white/70">{totalScore}</span> / {answeredCount * 5}</span>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -752,7 +794,7 @@ export default function SuperAdminDashboard() {
                     </div>
                     <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
                       {reviews.map((r) => (
-                        <div key={r.id} className="p-6 hover:bg-white/[0.01] transition-colors">
+                        <div key={r.id} className="p-6 hover:bg-white/[0.01] transition-colors group">
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-[#1A222C] border border-white/10 flex items-center justify-center font-bold text-[#94A3B8] text-sm">
@@ -763,13 +805,29 @@ export default function SuperAdminDashboard() {
                                 <p className="text-[10px] text-[#94A3B8] font-mono">{new Date(r.createdAt).toLocaleString()}</p>
                               </div>
                             </div>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <StarIcon key={star} className={`w-3.5 h-3.5 ${star <= r.rating ? "fill-amber-400 text-amber-400" : "text-slate-400"}`} />
-                              ))}
+                            <div className="flex items-center gap-2">
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <StarIcon key={star} className={`w-3.5 h-3.5 ${star <= r.rating ? "fill-amber-400 text-amber-400" : "text-slate-400"}`} />
+                                ))}
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm("Delete this evaluation?")) return;
+                                  try {
+                                    await deleteReview(r.id);
+                                    setReviews(prev => prev.filter(rev => rev.id !== r.id));
+                                  } catch (err) {
+                                    alert("Failed to delete: " + (err instanceof Error ? err.message : "Unknown error"));
+                                  }
+                                }}
+                                className="p-1.5 text-[#94A3B8] hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                          
+
                           {r.comment && (
                             <div className="bg-[#1A222C] rounded-xl p-4 mb-4 border border-white/5">
                               <p className="text-sm text-white/80 italic">"{r.comment}"</p>
@@ -811,12 +869,12 @@ export default function SuperAdminDashboard() {
                         <h3 className="font-bold text-[#F8FAFC]">Update Master Password</h3>
                       </div>
                       <p className="text-sm text-[#94A3B8]">Change the password for the Super Admin accounts. This action will be logged.</p>
-                      
+
                       <div className="flex flex-col gap-4">
                         <div className="relative">
-                          <input 
-                            type={showPass ? "text" : "password"} 
-                            placeholder="Enter new master password" 
+                          <input
+                            type={showPass ? "text" : "password"}
+                            placeholder="Enter new master password"
                             value={newAdminPass}
                             onChange={(e) => setNewAdminPass(e.target.value)}
                             className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50"
@@ -840,22 +898,22 @@ export default function SuperAdminDashboard() {
                         <h3 className="font-bold text-[#F8FAFC]">Global System Status</h3>
                       </div>
                       <p className="text-sm text-[#94A3B8]">Immediate platform controls for emergency maintenance or scaling.</p>
-                      
+
                       <div className="grid grid-cols-2 gap-4">
-                         <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between">
-                            <div>
-                               <p className="text-xs font-bold text-white uppercase tracking-wider mb-1">Booking Engine</p>
-                               <p className="text-[10px] text-emerald-500 font-bold">Online & Healthy</p>
-                            </div>
-                            <span className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                         </div>
-                         <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between opacity-50 cursor-not-allowed">
-                            <div>
-                               <p className="text-xs font-bold text-white uppercase tracking-wider mb-1">Maintenance Mode</p>
-                               <p className="text-[10px] text-white/40 font-bold italic">Disabled</p>
-                            </div>
-                            <span className="w-3 h-3 bg-[#1A222C] border border-white/10 rounded-full" />
-                         </div>
+                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-white uppercase tracking-wider mb-1">Booking Engine</p>
+                            <p className="text-[10px] text-emerald-500 font-bold">Online & Healthy</p>
+                          </div>
+                          <span className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                        </div>
+                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between opacity-50 cursor-not-allowed">
+                          <div>
+                            <p className="text-xs font-bold text-white uppercase tracking-wider mb-1">Maintenance Mode</p>
+                            <p className="text-[10px] text-white/40 font-bold italic">Disabled</p>
+                          </div>
+                          <span className="w-3 h-3 bg-[#1A222C] border border-white/10 rounded-full" />
+                        </div>
                       </div>
                     </section>
                   </div>
@@ -868,45 +926,45 @@ export default function SuperAdminDashboard() {
         </main>
       </div>
 
-        {/* ── EDIT ADMIN MODAL ── */}
-        {showAdminEdit && editingAdmin && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#151A22] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-              <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white">Edit Administrator</h3>
-                <button onClick={() => setShowAdminEdit(false)} className="text-[#94A3B8] hover:text-white"><X className="w-5 h-5" /></button>
+      {/* ── EDIT ADMIN MODAL ── */}
+      {showAdminEdit && editingAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-[#151A22] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Edit Administrator</h3>
+              <button onClick={() => setShowAdminEdit(false)} className="text-[#94A3B8] hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Full Name</label>
+                <input type="text" value={editingAdmin.name} onChange={(e) => setEditingAdmin({ ...editingAdmin, name: e.target.value })}
+                  className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
               </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Full Name</label>
-                  <input type="text" value={editingAdmin.name} onChange={(e) => setEditingAdmin({...editingAdmin, name: e.target.value})}
-                    className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Email Address</label>
-                  <input type="email" value={editingAdmin.email} onChange={(e) => setEditingAdmin({...editingAdmin, email: e.target.value})}
-                    className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Password (Reset)</label>
-                  <div className="relative">
-                    <input type={showPass ? "text" : "password"} value={editingAdmin.password} onChange={(e) => setEditingAdmin({...editingAdmin, password: e.target.value})}
-                      className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 pr-10 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
-                    <button onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
-                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                <button onClick={handleEditAdmin} className="w-full mt-2 py-3 bg-[#3F70FF] hover:bg-[#5280FF] text-white rounded-xl text-sm font-bold transition-colors">
-                  Save Changes
-                </button>
+              <div>
+                <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Email Address</label>
+                <input type="email" value={editingAdmin.email} onChange={(e) => setEditingAdmin({ ...editingAdmin, email: e.target.value })}
+                  className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
               </div>
-            </motion.div>
-          </div>
-        )}
+              <div>
+                <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Password (Reset)</label>
+                <div className="relative">
+                  <input type={showPass ? "text" : "password"} value={editingAdmin.password} onChange={(e) => setEditingAdmin({ ...editingAdmin, password: e.target.value })}
+                    className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 pr-10 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50 transition-colors" />
+                  <button onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
+                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button onClick={handleEditAdmin} className="w-full mt-2 py-3 bg-[#3F70FF] hover:bg-[#5280FF] text-white rounded-xl text-sm font-bold transition-colors">
+                Save Changes
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
-        {/* ── CREATE MODAL ── */}
+      {/* ── CREATE MODAL ── */}
       <AnimatePresence>
         {showCreate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -958,54 +1016,54 @@ export default function SuperAdminDashboard() {
 
         {/* ── CREATE SHIP MODAL ── */}
         {showShipCreate && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-             <motion.div key="create-ship-modal" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-               className="bg-[#151A22] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
-               <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#151A22] z-10">
-                 <h3 className="text-lg font-bold text-white">Create New Fleet</h3>
-                 <button onClick={() => setShowShipCreate(false)} className="text-[#94A3B8] hover:text-white"><X className="w-5 h-5" /></button>
-               </div>
-               <div className="p-6 space-y-4">
-                 <div className="grid grid-cols-2 gap-4">
-                   <div className="col-span-2">
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Ship Name</label>
-                     <input type="text" value={newShipModel.name} onChange={(e) => setNewShipModel({...newShipModel, name: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
-                   </div>
-                   <div>
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Type</label>
-                     <select value={newShipModel.type} onChange={(e) => setNewShipModel({...newShipModel, type: e.target.value as "ferry" | "pumpboat"})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50">
-                       <option value="ferry">Ferry</option>
-                       <option value="pumpboat">Pumpboat</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Route</label>
-                     <input type="text" placeholder="e.g. Danao to Camotes" value={newShipModel.route} onChange={(e) => setNewShipModel({...newShipModel, route: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
-                   </div>
-                   <div>
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Departure Time</label>
-                     <input type="time" value={newShipModel.departure} onChange={(e) => setNewShipModel({...newShipModel, departure: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
-                   </div>
-                   <div>
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Arrival Time</label>
-                     <input type="time" value={newShipModel.arrival} onChange={(e) => setNewShipModel({...newShipModel, arrival: e.target.value})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
-                   </div>
-                   <div>
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Base Ticket Price (₱)</label>
-                      <input type="number" min="0" value={newShipModel.price} onChange={(e) => setNewShipModel({...newShipModel, price: Number(e.target.value)})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
-                   </div>
-                   <div>
-                     <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Total Seating Capacity</label>
-                      <input type="number" min="1" max="1000" value={newShipModel.totalSeats} onChange={(e) => setNewShipModel({...newShipModel, totalSeats: Number(e.target.value)})} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
-                   </div>
-                 </div>
-                 {shipFormMsg && <p className={`text-sm text-center font-medium ${shipFormMsg.includes("success") ? "text-emerald-500" : "text-rose-500"}`}>{shipFormMsg}</p>}
-                 <button onClick={handleCreateShip} disabled={creatingShip} className="w-full py-3 bg-[#3F70FF] hover:bg-[#5280FF] text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50">
-                   {creatingShip ? "Registering Vessel..." : "Confirm & Launch Fleet"}
-                 </button>
-               </div>
-             </motion.div>
-           </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div key="create-ship-modal" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#151A22] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#151A22] z-10">
+                <h3 className="text-lg font-bold text-white">Create New Fleet</h3>
+                <button onClick={() => setShowShipCreate(false)} className="text-[#94A3B8] hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Ship Name</label>
+                    <input type="text" value={newShipModel.name} onChange={(e) => setNewShipModel({ ...newShipModel, name: e.target.value })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Type</label>
+                    <select value={newShipModel.type} onChange={(e) => setNewShipModel({ ...newShipModel, type: e.target.value as "ferry" | "pumpboat" })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50">
+                      <option value="ferry">Ferry</option>
+                      <option value="pumpboat">Pumpboat</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Route</label>
+                    <input type="text" placeholder="e.g. Danao to Camotes" value={newShipModel.route} onChange={(e) => setNewShipModel({ ...newShipModel, route: e.target.value })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Departure Time</label>
+                    <input type="time" value={newShipModel.departure} onChange={(e) => setNewShipModel({ ...newShipModel, departure: e.target.value })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Arrival Time</label>
+                    <input type="time" value={newShipModel.arrival} onChange={(e) => setNewShipModel({ ...newShipModel, arrival: e.target.value })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Base Ticket Price (₱)</label>
+                    <input type="number" min="0" value={newShipModel.price} onChange={(e) => setNewShipModel({ ...newShipModel, price: Number(e.target.value) })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#94A3B8] mb-1.5 block uppercase tracking-wider">Total Seating Capacity</label>
+                    <input type="number" min="1" max="1000" value={newShipModel.totalSeats} onChange={(e) => setNewShipModel({ ...newShipModel, totalSeats: Number(e.target.value) })} className="w-full bg-[#1A222C] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#3F70FF]/50" />
+                  </div>
+                </div>
+                {shipFormMsg && <p className={`text-sm text-center font-medium ${shipFormMsg.includes("success") ? "text-emerald-500" : "text-rose-500"}`}>{shipFormMsg}</p>}
+                <button onClick={handleCreateShip} disabled={creatingShip} className="w-full py-3 bg-[#3F70FF] hover:bg-[#5280FF] text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50">
+                  {creatingShip ? "Registering Vessel..." : "Confirm & Launch Fleet"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
 
         {/* ── ASSIGN SHIPS MODAL ── */}
@@ -1020,7 +1078,7 @@ export default function SuperAdminDashboard() {
                 </div>
                 <button onClick={() => setAssignAdminId(null)} className="text-[#94A3B8] hover:text-white"><X className="w-5 h-5" /></button>
               </div>
-              
+
               <div className="p-6 overflow-y-auto space-y-3">
                 {ships.length === 0 ? (
                   <p className="text-sm text-[#94A3B8] text-center">No ships available.</p>
@@ -1036,21 +1094,21 @@ export default function SuperAdminDashboard() {
                           <p className="font-bold text-sm text-white">{ship.name}</p>
                           <p className="text-xs text-[#94A3B8] uppercase">{ship.type}</p>
                         </div>
-                        <input 
-                          type="checkbox" 
-                          className="hidden" 
-                          checked={isSelected} 
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={isSelected}
                           onChange={(e) => {
                             if (e.target.checked) setSelectedShipIds([...selectedShipIds, ship.id]);
                             else setSelectedShipIds(selectedShipIds.filter(id => id !== ship.id));
-                          }} 
+                          }}
                         />
                       </label>
                     );
                   })
                 )}
               </div>
-              
+
               <div className="p-6 border-t border-white/5 shrink-0">
                 <button onClick={handleAssignShips} disabled={assigningLoading} className="w-full py-3 bg-[#3F70FF] hover:bg-[#5280FF] text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50">
                   {assigningLoading ? "Saving..." : "Save Assignments"}

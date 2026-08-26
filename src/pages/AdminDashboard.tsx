@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking } from "@/lib/store";
+import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, deleteReview, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking } from "@/lib/store";
 import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
@@ -73,11 +73,10 @@ const BookingRow = ({ b, typeColor, onCollect, onPrint }: { b: DashboardBooking;
           </button>
         </>
       ) : (
-        <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-          b.status === "boarded"
+        <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${b.status === "boarded"
             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(52,211,153,0.1)]"
             : "bg-primary/10 text-primary border border-primary/20"
-        }`}>
+          }`}>
           {b.status}
         </span>
       )}
@@ -142,7 +141,7 @@ const StaffRow = ({ s, onRevoke }: { s: Staff; onRevoke: (id: string) => void })
           </button>
         </div>
       </div>
-      
+
       <AnimatePresence>
         {showDetails && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-3 pt-4 mt-4 border-t border-border/30 overflow-hidden">
@@ -176,7 +175,7 @@ function groupByDate(bookings: DashboardBooking[]) {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  
+
   // Auth Check
   const staffJson = sessionStorage.getItem("adminStaff");
   console.log("[AdminDashboard] staffJson:", staffJson);
@@ -193,51 +192,51 @@ const AdminDashboard = () => {
 
   const adminType = (currentStaff.shipType || "ferry") as "ferry" | "pumpboat";
   console.log("[AdminDashboard] adminType:", adminType);
-  const [ships, setShips]                     = useState<Ship[]>([]);
-  const [todayBookings, setTodayBookings]     = useState<DashboardBooking[]>([]);
+  const [ships, setShips] = useState<Ship[]>([]);
+  const [todayBookings, setTodayBookings] = useState<DashboardBooking[]>([]);
   const [historyBookings, setHistoryBookings] = useState<DashboardBooking[]>([]);
-  const [seats, setSeats]                     = useState<SeatGridRow[]>([]);
-  const [staffList, setStaffList]             = useState<Staff[]>([]);
-  const [scanHistory, setScanHistory]         = useState<ScanRecord[]>([]);
-  const [reviews, setReviews]                 = useState<Review[]>([]);
+  const [seats, setSeats] = useState<SeatGridRow[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [allShipsForMapping, setAllShipsForMapping] = useState<Ship[]>([]);
-  const [selectedShipId, setSelectedShipId]   = useState<string | null>(null);
-  const [activeTab, setActiveTab]             = useState<Tab>("manifest");
+  const [selectedShipId, setSelectedShipId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("manifest");
   console.log("[AdminDashboard] Tab states initialized.");
   const [selectedManifestDate, setSelectedManifestDate] = useState<string>(today);
-  const [loading, setLoading]                 = useState(false);
+  const [loading, setLoading] = useState(false);
   const [verificationBookings, setVerificationBookings] = useState<DashboardBooking[]>([]);
-  const [reservations, setReservations]                 = useState<DashboardBooking[]>([]);
-  const [allReservations, setAllReservations]           = useState<DashboardBooking[]>([]);
-  const [reservationSearch, setReservationSearch]       = useState("");
-  const [expandedYears, setExpandedYears]     = useState<string[]>([today.split("-")[0]]);
-  const [expandedMonths, setExpandedMonths]   = useState<string[]>([]);
+  const [reservations, setReservations] = useState<DashboardBooking[]>([]);
+  const [allReservations, setAllReservations] = useState<DashboardBooking[]>([]);
+  const [reservationSearch, setReservationSearch] = useState("");
+  const [expandedYears, setExpandedYears] = useState<string[]>([today.split("-")[0]]);
+  const [expandedMonths, setExpandedMonths] = useState<string[]>([]);
 
   // ── Counter scanner state ──
   const [scanCameraActive, setScanCameraActive] = useState(false);
-  const [scanStarting, setScanStarting]         = useState(false);
-  const [scanProcessing, setScanProcessing]     = useState(false);
-  const [scanManualCode, setScanManualCode]     = useState("");
-  const [scanError, setScanError]               = useState("");
-  const [scanSuccessMsg, setScanSuccessMsg]     = useState("");
-  const [scanBooking, setScanBooking]           = useState<BookingRowData | null>(null);
-  const [scanGroup, setScanGroup]               = useState<BookingRowData[]>([]);
+  const [scanStarting, setScanStarting] = useState(false);
+  const [scanProcessing, setScanProcessing] = useState(false);
+  const [scanManualCode, setScanManualCode] = useState("");
+  const [scanError, setScanError] = useState("");
+  const [scanSuccessMsg, setScanSuccessMsg] = useState("");
+  const [scanBooking, setScanBooking] = useState<BookingRowData | null>(null);
+  const [scanGroup, setScanGroup] = useState<BookingRowData[]>([]);
   const scanQrRef = useRef<Html5Qrcode | null>(null);
   const scanHasScanned = useRef(false);
 
   // Staff and Ship Modals
-  const [newName, setNewName]         = useState("");
-  const [newEmail, setNewEmail]       = useState("");
-  const [newPass, setNewPass]         = useState("");
-  const [showPass, setShowPass]       = useState(false);
-  const [staffMsg, setStaffMsg]       = useState("");
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [staffMsg, setStaffMsg] = useState("");
   const [addingStaff, setAddingStaff] = useState(false);
   const [isSavingStaff, setIsSavingStaff] = useState(false);
   const [showShipCreate, setShowShipCreate] = useState(false);
   const [requestingShip, setRequestingShip] = useState(false);
-  const [shipFormMsg, setShipFormMsg]       = useState("");
-  
-  const [newShipModel, setNewShipModel] = useState<NewShipModel>({ 
+  const [shipFormMsg, setShipFormMsg] = useState("");
+
+  const [newShipModel, setNewShipModel] = useState<NewShipModel>({
     name: "", type: adminType, stops: [{ location: "", departure: "", arrival: "-" }, { location: "", departure: "-", arrival: "" }],
     price: 100, totalSeats: 100, scheduleDays: ""
   });
@@ -257,13 +256,13 @@ const AdminDashboard = () => {
 
     const freshRole = latestStaff.role;
     const freshShipIds = latestStaff.ship_id ? latestStaff.ship_id.split(",").map((s: string) => s.trim()) : [];
-    
+
     const all = await getShips();
     setAllShipsForMapping(all); // Keep a list of ALL ships for name lookups
-    const filtered = freshRole === "super_admin" 
-      ? all.filter(s => s.type === adminType) 
+    const filtered = freshRole === "super_admin"
+      ? all.filter(s => s.type === adminType)
       : all.filter(s => freshShipIds.includes(s.id) || s.requester_id === currentStaff.id);
-    
+
     setShips(filtered);
     if (!selectedShipId && filtered.length > 0) setSelectedShipId(filtered[0].id);
   }, [adminType, currentStaff.id, selectedShipId]);
@@ -299,12 +298,12 @@ const AdminDashboard = () => {
       // If Admin or Super Admin, show ALL pending IDs in the whole system for centralized review
       const managedShipIds = ships.map(s => s.id);
       let query = supabase.from("bookings").select("*").eq("id_verification_status", "pending").neq("status", "expired");
-      
+
       // Only restrict 'scanner' roles to their specific ships
       if (currentStaff.role === "scanner") {
         query = query.in("ship_id", managedShipIds);
       }
-      
+
       const { data: vData } = await query.order("created_at", { ascending: true });
       setVerificationBookings(vData || []);
     } finally { setLoading(false); }
@@ -325,7 +324,7 @@ const AdminDashboard = () => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selectedShipId, selectedManifestDate, loadShipData]);
-  
+
   useEffect(() => {
     getStaffList(adminType).then(setStaffList);
   }, [adminType, selectedShipId, activeTab]);
@@ -339,12 +338,12 @@ const AdminDashboard = () => {
     try {
       const stopsArr = getShipStops(currentShip);
       const routeStr = stopsArr.map(s => s.location).filter(Boolean).join(" → ");
-      
-      await supabase.from("ships").update({ 
-        name: currentShip.name, 
-        price: currentShip.price, 
-        total_seats: currentShip.totalSeats, 
-        total_bunks: currentShip.totalBunks || 0, 
+
+      await supabase.from("ships").update({
+        name: currentShip.name,
+        price: currentShip.price,
+        total_seats: currentShip.totalSeats,
+        total_bunks: currentShip.totalBunks || 0,
         is_active: currentShip.isActive,
         route: routeStr,
         stops: JSON.stringify(stopsArr),
@@ -389,7 +388,7 @@ const AdminDashboard = () => {
     setRequestingShip(true);
     try {
       const routeStr = newShipModel.stops.map(s => s.location).filter(Boolean).join(" → ");
-      const id = await addShip({ ...newShipModel, route: routeStr, departure: newShipModel.stops[0].departure, arrival: newShipModel.stops[newShipModel.stops.length-1].arrival, isConfirmed: false, scheduleDays: newShipModel.scheduleDays, requesterId: currentStaff.id, requesterName: currentStaff.name });
+      const id = await addShip({ ...newShipModel, route: routeStr, departure: newShipModel.stops[0].departure, arrival: newShipModel.stops[newShipModel.stops.length - 1].arrival, isConfirmed: false, scheduleDays: newShipModel.scheduleDays, requesterId: currentStaff.id, requesterName: currentStaff.name });
       setShipFormMsg("Requested!");
       setTimeout(() => setShowShipCreate(false), 2000);
       loadShips();
@@ -591,19 +590,19 @@ const AdminDashboard = () => {
       || (b.id || "").toLowerCase().includes(q);
   });
   const downloadCSV = (bookings: DashboardBooking[], label: string) => {
-    const csv = [["Name","Type","Seat","Phone"], ...bookings.map(b => [b.passengerName, b.passengerType, b.seatLabel, b.phone])].map(r => r.join(",")).join("\n");
+    const csv = [["Name", "Type", "Seat", "Phone"], ...bookings.map(b => [b.passengerName, b.passengerType, b.seatLabel, b.phone])].map(r => r.join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `${label}.csv`; a.click();
   };
 
   const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
     { id: "manifest", label: "Manifest", icon: FileText },
     { id: "reservations", label: "Reservations", icon: Wallet },
-    { id: "scan",     label: "Scan & Confirm", icon: ScanLine },
-    { id: "seats",    label: "Seats",    icon: Armchair },
-    { id: "history",  label: "History",  icon: History },
-    { id: "staff",    label: "Staff",    icon: UserCog },
-    { id: "vessel",   label: "Vessel",   icon: ShipIcon },
-    { id: "reviews",  label: "Reviews",  icon: MessageSquare },
+    { id: "scan", label: "Scan & Confirm", icon: ScanLine },
+    { id: "seats", label: "Seats", icon: Armchair },
+    { id: "history", label: "History", icon: History },
+    { id: "staff", label: "Staff", icon: UserCog },
+    { id: "vessel", label: "Vessel", icon: ShipIcon },
+    { id: "reviews", label: "Reviews", icon: MessageSquare },
     { id: "verification", label: "Identity", icon: ShieldAlert },
   ];
 
@@ -614,8 +613,8 @@ const AdminDashboard = () => {
       {/* Header */}
       <header className="flex items-center justify-between mb-10">
         <div className="flex items-center gap-5">
-           <button onClick={() => navigate("/")} className="p-3 glass-card rounded-2xl hover:bg-muted/50 transition-all active:scale-95"><ArrowLeft className="w-5 h-5 text-foreground" /></button>
-           <div><h1 className="text-2xl font-black text-foreground tracking-tighter leading-none mb-1 capitalize">{adminType} Master Console</h1><p className="text-[10px] text-muted-foreground font-black tracking-[0.3em] uppercase opacity-60">{currentShip?.name || "Terminal Standby"}</p></div>
+          <button onClick={() => navigate("/")} className="p-3 glass-card rounded-2xl hover:bg-muted/50 transition-all active:scale-95"><ArrowLeft className="w-5 h-5 text-foreground" /></button>
+          <div><h1 className="text-2xl font-black text-foreground tracking-tighter leading-none mb-1 capitalize">{adminType} Master Console</h1><p className="text-[10px] text-muted-foreground font-black tracking-[0.3em] uppercase opacity-60">{currentShip?.name || "Terminal Standby"}</p></div>
         </div>
         <div className="flex items-center gap-2">
           {verificationBookings.length > 0 && (
@@ -629,821 +628,877 @@ const AdminDashboard = () => {
 
       {/* Ship Tabs */}
       <div className="flex gap-2 mb-10 overflow-x-auto no-scrollbar pb-2">
-         {ships.map(s => (
-           <button key={s.id} onClick={() => setSelectedShipId(s.id)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${selectedShipId === s.id ? "bg-primary text-white border-primary shadow-xl shadow-primary/20" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}>{s.name} {!s.isConfirmed && " (Pending)"}</button>
-         ))}
-         <button onClick={() => setShowShipCreate(true)} className="px-6 py-3 rounded-2xl bg-primary/10 border border-primary/20 text-primary font-black text-xs uppercase tracking-widest hover:bg-primary/20 transition-all whitespace-nowrap shrink-0 ml-auto">+ Submit Request</button>
+        {ships.map(s => (
+          <button key={s.id} onClick={() => setSelectedShipId(s.id)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${selectedShipId === s.id ? "bg-primary text-white border-primary shadow-xl shadow-primary/20" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}>{s.name} {!s.isConfirmed && " (Pending)"}</button>
+        ))}
+        <button onClick={() => setShowShipCreate(true)} className="px-6 py-3 rounded-2xl bg-primary/10 border border-primary/20 text-primary font-black text-xs uppercase tracking-widest hover:bg-primary/20 transition-all whitespace-nowrap shrink-0 ml-auto">+ Submit Request</button>
       </div>
 
       {selectedShipId && currentShip ? (
         <div className="space-y-8">
-           {/* Stats */}
-           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[ { l: "Trip", v: todayBookings.length, i: Users, c: "text-primary" }, { l: "Archive", v: historyBookings.length, i: History, c: "text-secondary" }, { l: "Capacity", v: currentShip.totalSeats + (currentShip.totalBunks || 0)*2, i: Armchair, c: "text-amber-500" }, { l: "Vessels", v: ships.length, i: ShipIcon, c: "text-purple-500" }].map(s => (
-                <div key={s.l} className="glass-card p-5 rounded-[2rem] text-center border-border/30">
-                  <s.i className={`w-4 h-4 mx-auto mb-3 opacity-40 ${s.c}`} />
-                  <p className="text-2xl font-black text-foreground tracking-tighter mb-1">{s.v}</p>
-                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest opacity-60">{s.l}</p>
-                </div>
-              ))}
-           </div>
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[{ l: "Trip", v: todayBookings.length, i: Users, c: "text-primary" }, { l: "Archive", v: historyBookings.length, i: History, c: "text-secondary" }, { l: "Capacity", v: currentShip.totalSeats + (currentShip.totalBunks || 0) * 2, i: Armchair, c: "text-amber-500" }, { l: "Vessels", v: ships.length, i: ShipIcon, c: "text-purple-500" }].map(s => (
+              <div key={s.l} className="glass-card p-5 rounded-[2rem] text-center border-border/30">
+                <s.i className={`w-4 h-4 mx-auto mb-3 opacity-40 ${s.c}`} />
+                <p className="text-2xl font-black text-foreground tracking-tighter mb-1">{s.v}</p>
+                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest opacity-60">{s.l}</p>
+              </div>
+            ))}
+          </div>
 
-           {/* Tab Nav */}
-           <nav className="flex p-1.5 bg-muted/40 rounded-3xl border border-border/50 gap-1">
-              {TABS.map(t => (
-                <button key={t.id} onClick={() => setActiveTab(t.id)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? "bg-background text-primary shadow-sm border border-border/30" : "text-muted-foreground hover:text-foreground"}`}><t.icon className="w-3.5 h-3.5" /> {t.label}</button>
-              ))}
-           </nav>
+          {/* Tab Nav */}
+          <nav className="flex p-1.5 bg-muted/40 rounded-3xl border border-border/50 gap-1">
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? "bg-background text-primary shadow-sm border border-border/30" : "text-muted-foreground hover:text-foreground"}`}><t.icon className="w-3.5 h-3.5" /> {t.label}</button>
+            ))}
+          </nav>
 
-           {/* Content area */}
-           <main className="min-h-[400px]">
-              {activeTab === "manifest" && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center glass-card p-5 rounded-[2rem]">
-                    <div><p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Schedule View</p><p className="text-sm font-bold text-foreground">Trip date: {selectedManifestDate}</p></div>
-                    <div className="flex gap-2">
-                       <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)} className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
-                       <button onClick={() => downloadCSV(todayBookings, "manifest")} className="p-2.5 glass-card rounded-xl text-primary border border-primary/20 hover:bg-primary/10"><Download className="w-4 h-4" /></button>
-                    </div>
+          {/* Content area */}
+          <main className="min-h-[400px]">
+            {activeTab === "manifest" && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center glass-card p-5 rounded-[2rem]">
+                  <div><p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Schedule View</p><p className="text-sm font-bold text-foreground">Trip date: {selectedManifestDate}</p></div>
+                  <div className="flex gap-2">
+                    <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)} className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
+                    <button onClick={() => downloadCSV(todayBookings, "manifest")} className="p-2.5 glass-card rounded-xl text-primary border border-primary/20 hover:bg-primary/10"><Download className="w-4 h-4" /></button>
                   </div>
-                  {todayBookings.length === 0 ? <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">No Active Bookings</div>
+                </div>
+                {todayBookings.length === 0 ? <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">No Active Bookings</div>
                   : <div className="grid gap-3">{todayBookings.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} onCollect={handleCollectPaid} onPrint={handlePrintTicket} />)}</div>}
-                </div>
-              )}
+              </div>
+            )}
 
-              {activeTab === "seats" && (
-                <div className="space-y-10">
-                   <div className="glass-card rounded-[2rem] p-5 border-border/50">
-                     <div className="flex items-center justify-between gap-4 mb-4">
-                       <div>
-                         <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Seat Availability</p>
-                         <p className="text-sm font-bold text-foreground">
-                           {selectedManifestDate
-                             ? new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })
-                             : "Select a date"}
-                         </p>
-                       </div>
-                       <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)}
-                         className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
-                     </div>
-                     <div className="flex flex-wrap gap-2 text-[9px] font-black uppercase tracking-widest">
-                       <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">Available</span>
-                       <span className="px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-500">Booked</span>
-                       <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500">Reserved</span>
-                       <span className="px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">Blocked</span>
-                     </div>
-                   </div>
-                   {(() => {
-                      const regular = seats.filter(s => s.type === "seat");
-                      
-                      
-                       // Sort berths numerically (U1, U2, ... U10) instead of alphabetically (U1, U10, U2)
-                       const sortBerths = (a: SeatGridRow, b: SeatGridRow) => {
-                         const numA = parseInt((a.label || "").replace(/\D/g, '')) || 0;
-                         const numB = parseInt((b.label || "").replace(/\D/g, '')) || 0;
-                         return numA - numB;
-                       };
-
-                       const up = seats.filter(s => s.type === "bunk-upper").sort(sortBerths);
-                       const lw = seats.filter(s => s.type === "bunk-lower").sort(sortBerths);
-                       
-                       const Seat = (s: SeatGridRow) => (
-                        <button key={s.id} onClick={() => s.status !== "booked" && s.status !== "reserved" && supabase.from("seats").update({ status: s.status === "blocked" ? "available" : "blocked" }).eq("id", s.id).then(() => loadShipData())} 
-                          className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500" : s.status === "reserved" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:scale-105"}`}>
-                          {s.status === "booked" ? <Users className="w-3 h-3 mb-1" /> : s.status === "reserved" ? <Wallet className="w-3 h-3 mb-1" /> : s.status === "blocked" ? <Lock className="w-3 h-3 mb-1" /> : <Armchair className="w-3 h-3 mb-1" />}
-                          {s.label}
-                        </button>
-                      );
-
-                      return (
-                        <div className="space-y-12">
-                           <section>
-                              <h3 className="text-[10px] font-black text-muted-foreground uppercase mb-6 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Seating Deck ({regular.length})</h3>
-                              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">{regular.map(Seat)}</div>
-                           </section>
-                           {up.length > 0 && (
-                              <section className="bg-muted/20 p-8 rounded-[3rem] border border-border/50">
-                                 <h3 className="text-[10px] font-black text-muted-foreground uppercase mb-8 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Accommodation Berths ({up.length*2})</h3>
-                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {up.map((ub, idx) => (
-                                       <div key={idx} className="glass-card p-5 rounded-3xl border-border/50 flex flex-col gap-4 hover:border-amber-500/30 transition-colors">
-                                          <div className="flex justify-between items-center"><p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Berth Suite {ub.label.replace('U', '')}</p><div className="flex gap-1"><div className="w-1 h-1 rounded-full bg-amber-500" /><div className="w-1 h-1 rounded-full bg-secondary" /></div></div>
-                                          <div className="flex items-center gap-4 justify-center py-2 bg-background/20 rounded-2xl border border-border/10">
-                                            <div className="flex flex-col items-center gap-1"><span className="text-[7px] font-bold text-muted-foreground uppercase">Upper</span>{Seat(ub)}</div>
-                                            <div className="w-px h-10 bg-border/20 mx-2" />
-                                            {lw[idx] && <div className="flex flex-col items-center gap-1"><span className="text-[7px] font-bold text-muted-foreground uppercase">Lower</span>{Seat(lw[idx])}</div>}
-                                          </div>
-                                       </div>
-                                    ))}
-                                 </div>
-                              </section>
-                           )}
-                        </div>
-                      )
-                   })()}
-                </div>
-              )}
-
-              {activeTab === "vessel" && (
-                <div className="space-y-8">
-                  <div className="glass-card rounded-[3rem] p-10 relative overflow-hidden bg-gradient-to-br from-background to-muted/30 border-border/50">
-                     <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none transform rotate-12"><ShipIcon className="w-40 h-40" /></div>
-                     <div className="relative z-10">
-                         <div className="flex justify-between items-start mb-12">
-                            <div><h2 className="text-4xl font-black text-foreground tracking-tighter mb-2">Vessel Architecture</h2><p className="text-sm text-muted-foreground font-medium">Technical specifications for {currentShip.name}</p></div>
-                            <div className="flex flex-col items-end gap-2">
-                               <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${currentShip.isConfirmed ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"} border`}>
-                                 {currentShip.isConfirmed ? "Approved" : "Pending Confirmation"}
-                               </div>
-                               <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${currentShip.isActive ? "bg-secondary/10 text-secondary border-secondary/20" : "bg-destructive/10 text-destructive border-destructive/20"} border`}>
-                                 {currentShip.isActive ? "Deployed" : "Staged (Internal Only)"}
-                               </div>
-                            </div>
-                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                           <InputField label="Operator Callsign" value={currentShip.name} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? {...s, name: v} : s))} />
-                           <InputField label="Base Price (₱)" type="number" value={String(currentShip.price)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? {...s, price: Number(v)} : s))} />
-                           <InputField label="Deck Seating" type="number" value={String(currentShip.totalSeats)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? {...s, totalSeats: Number(v)} : s))} />
-                           <InputField label="Accommodation Suites" type="number" value={String(currentShip.totalBunks || 0)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? {...s, totalBunks: Number(v)} : s))} />
-                        </div>
-
-                        {/* Route Matrix */}
-                        <div className="mt-12 space-y-6">
-                           <div className="flex justify-between items-center">
-                              <div>
-                                 <h3 className="text-xl font-black text-foreground tracking-tight">Navigation Matrix</h3>
-                                 <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Define ports, schedules and leg pricing</p>
-                               </div>
-                               <button onClick={() => {
-                                  const stops = getShipStops(currentShip);
-                                  const next = [...stops, { location: "", arrival: "", departure: "", price: 0 }];
-                                  setShips(ships.map(s => s.id === selectedShipId ? {...s, stops: JSON.stringify(next)} : s));
-                               }} className="text-primary text-[10px] font-black uppercase hover:underline flex items-center gap-1"><Plus className="w-3 h-3" /> Add Stop</button>
-                           </div>
-                           <div className="space-y-4">
-                              {getShipStops(currentShip).map((s, idx) => (
-                                 <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10 group">
-                                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                                       <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : "Transit Stop"} value={s.location} onChange={v => {
-                                          const next = getShipStops(currentShip);
-                                          next[idx].location = v;
-                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                       }} /></div>
-                                       <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => {
-                                          const next = getShipStops(currentShip);
-                                          next[idx].arrival = v;
-                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                       }} /></div>
-                                       <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => {
-                                          const next = getShipStops(currentShip);
-                                          next[idx].departure = v;
-                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                       }} /></div>
-                                       <div className="w-full md:w-28"><InputField label="Leg ₱" type="number" value={String(s.price || 0)} onChange={v => {
-                                          const next = getShipStops(currentShip);
-                                          next[idx].price = Number(v);
-                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                       }} /></div>
-                                       <button onClick={() => {
-                                          const next = getShipStops(currentShip);
-                                          next.splice(idx,1);
-                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                       }} className="p-3 text-destructive mb-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-5 h-5" /></button>
-                                    </div>
-
-                                    {/* Weekly operation for this stop */}
-                                    {(() => {
-                                       const stopDays = s.scheduleDays?.trim() ? s.scheduleDays.split(",").map(d => d.trim()).filter(Boolean) : [...SCHEDULE_DAYS];
-                                       const isDaily = stopDays.length >= SCHEDULE_DAYS.length;
-                                       const setStopDays = (daysArr: string[]) => {
-                                          const next = getShipStops(currentShip);
-                                          next[idx].scheduleDays = daysArr.length ? daysArr.join(",") : undefined;
-                                          setShips(ships.map(ship => ship.id === selectedShipId ? {...ship, stops: JSON.stringify(next)} : ship));
-                                       };
-                                       return (
-                                          <div className="mt-4 pt-4 border-t border-border/20">
-                                             <div className="flex items-center gap-2 mb-2">
-                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{s.location || `Stop ${idx + 1}`} — Weekly Operation</p>
-                                                {!s.scheduleDays?.trim() && <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Defaults to Daily</span>}
-                                             </div>
-                                             <div className="flex flex-wrap gap-1.5">
-                                                <button
-                                                   onClick={() => setStopDays(isDaily ? [] : [...SCHEDULE_DAYS])}
-                                                   className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isDaily ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
-                                                >
-                                                   Daily
-                                                </button>
-                                                {SCHEDULE_DAYS.map(day => {
-                                                   const active = stopDays.includes(day);
-                                                   return (
-                                                      <button
-                                                         key={day}
-                                                         onClick={() => {
-                                                            const nextDays = active ? stopDays.filter(d => d !== day) : [...stopDays, day];
-                                                            setStopDays(nextDays);
-                                                         }}
-                                                         className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${active ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
-                                                      >
-                                                         {day}
-                                                      </button>
-                                                   );
-                                                })}
-                                             </div>
-                                          </div>
-                                       );
-                                    })()}
-                                 </div>
-                              ))}
-                           </div>
-                        </div>
-
-                         <div className="mt-12 flex flex-col md:flex-row gap-4 pt-10 border-t border-border/30">
-                            <button onClick={handleUpdateVessel} disabled={loading} className="flex-[2] py-5 bg-primary text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes</button>
-                            
-                            {!currentShip.isConfirmed ? (
-                              <button disabled className="flex-1 px-8 rounded-3xl border border-amber-500/20 bg-amber-500/5 text-amber-500/50 text-[10px] uppercase font-black tracking-widest cursor-not-allowed">Awaiting Approval</button>
-                            ) : (
-                              <button 
-                                onClick={async () => {
-                                  if (!confirm("Are you sure you want to change the deployment status of this vessel?")) return;
-                                  await toggleShipActive(currentShip.id, !currentShip.isActive);
-                                  loadShips();
-                                }} 
-                                className={`flex-1 px-8 rounded-3xl border font-black text-[10px] uppercase tracking-widest transition-all shadow-xl ${currentShip.isActive ? "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20" : "bg-secondary text-white border-secondary shadow-secondary/20 hover:scale-105"}`}
-                              >
-                                {currentShip.isActive ? "Deactivate Fleet" : "Deploy to Public"}
-                              </button>
-                            )}
-                         </div>
-                        {shipFormMsg && <p className="mt-6 text-center text-[10px] font-black text-secondary tracking-widest uppercase animate-pulse">{shipFormMsg}</p>}
-                     </div>
-                  </div>
-                 </div>
-              )}
-
-              {activeTab === "staff" && (
-                <div className="space-y-6">
-                   <div className="flex justify-between items-center"><h3 className="text-[10px] font-black text-muted-foreground uppercase">Terminal Personnel</h3><button onClick={() => setAddingStaff(true)} className="px-5 py-2.5 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">Enroll Staff</button></div>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {staffList.filter(s => s.role === "scanner" && (s.shipIds?.includes(selectedShipId || "") || (s.shipIds?.length === 0))).map(s => (
-                        <StaffRow 
-                          key={s.id} 
-                          s={s} 
-                          onRevoke={async (id) => { 
-                            if(confirm("Revoke access?")) { 
-                              try {
-                                await deleteStaff(id);
-                                getStaffList(adminType).then(setStaffList);
-                               } catch (err) {
-                                 alert("Failed to revoke access: " + (err instanceof Error ? err.message : "Unknown error"));
-                               }
-                            } 
-                          }} 
-                        />
-                      ))}
-                   </div>
-                </div>
-              )}
-
-               {activeTab === "history" && (
-                <div className="space-y-10">
-                   <div className="flex items-center justify-between">
-                     <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Trip Archives</h3>
-                     <History className="w-4 h-4 text-muted-foreground/30" />
-                   </div>
-
-                   {historyBookings.length === 0 ? (
-                     <div className="py-20 text-center glass-card rounded-[2.5rem] opacity-40 font-black text-xs uppercase tracking-widest border-dashed">
-                       Archive Empty
-                     </div>
-                   ) : (
-                     Object.entries(groupByDate(historyBookings)).sort(([a], [b]) => b.localeCompare(a)).map(([year, months]) => {
-                       const isYearExpanded = expandedYears.includes(year);
-                       return (
-                         <div key={year} className="space-y-4">
-                           {/* Year Folder Header */}
-                           <button 
-                             onClick={() => setExpandedYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year])}
-                             className="flex items-center gap-3 w-full group transition-all"
-                           >
-                             <div className={`px-4 py-1.5 rounded-full border text-[10px] font-black tracking-[0.2em] uppercase transition-all flex items-center gap-2 ${
-                               isYearExpanded ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-primary/5 text-primary border-primary/20"
-                             }`}>
-                               {isYearExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                               {year}
-                             </div>
-                             <div className={`flex-1 h-px bg-gradient-to-r transition-all ${isYearExpanded ? "from-primary/40 to-transparent" : "from-primary/10 to-transparent"}`} />
-                           </button>
-
-                           <AnimatePresence>
-                             {isYearExpanded && (
-                               <motion.div 
-                                 initial={{ height: 0, opacity: 0 }} 
-                                 animate={{ height: "auto", opacity: 1 }} 
-                                 exit={{ height: 0, opacity: 0 }}
-                                 className="overflow-hidden space-y-6"
-                               >
-                                 {Object.entries(months).sort(([a], [b]) => b.localeCompare(a)).map(([month, days]) => {
-                                   const monthKey = `${year}-${month}`;
-                                   const isMonthExpanded = expandedMonths.includes(monthKey);
-                                   return (
-                                     <div key={month} className="ml-4 pl-6 border-l border-border/30 space-y-4">
-                                       {/* Month Sub-header */}
-                                       <button 
-                                         onClick={() => setExpandedMonths(prev => prev.includes(monthKey) ? prev.filter(m => m !== monthKey) : [...prev, monthKey])}
-                                         className={`flex items-center gap-2 w-full transition-all group ${isMonthExpanded ? "text-foreground" : "text-muted-foreground/60"}`}
-                                       >
-                                         <div className={`w-2 h-2 rounded-full transition-all ${isMonthExpanded ? "bg-primary scale-125 shadow-[0_0_8px_rgba(227, 0, 15,0.4)]" : "bg-muted-foreground/30"}`} />
-                                         <h4 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                                           {new Date(2000, parseInt(month) - 1).toLocaleString("default", { month: "long" })}
-                                           {isMonthExpanded ? <ChevronDown className="w-3 h-3 opacity-40" /> : <ChevronRight className="w-3 h-3 opacity-40" />}
-                                         </h4>
-                                       </button>
-
-                                       <AnimatePresence>
-                                         {isMonthExpanded && (
-                                           <motion.div 
-                                             initial={{ height: 0, opacity: 0 }} 
-                                             animate={{ height: "auto", opacity: 1 }} 
-                                             exit={{ height: 0, opacity: 0 }}
-                                             className="overflow-hidden space-y-4"
-                                           >
-                                             {Object.entries(days).sort(([a], [b]) => b.localeCompare(a)).map(([day, items]) => (
-                                               <div key={day} className="glass-card rounded-[2rem] overflow-hidden border-border/30 hover:border-border transition-colors">
-                                                 <div className="px-6 py-4 bg-muted/10 border-b border-border/30 flex justify-between items-center group/item">
-                                                   <div className="flex items-center gap-3">
-                                                     <p className="text-[10px] font-black text-foreground uppercase tracking-wider">
-                                                       {new Date(`${year}-${month}-${day}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-                                                     </p>
-                                                     <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
-                                                     <p className="text-[9px] font-black text-muted-foreground uppercase">{items.length} Records</p>
-                                                   </div>
-                                                   <button 
-                                                     onClick={(e) => { e.stopPropagation(); downloadCSV(items, `manifest-${year}-${month}-${day}`); }} 
-                                                     className="p-2 rounded-xl text-primary hover:bg-primary/10 transition-all opacity-40 group-hover/item:opacity-100"
-                                                   >
-                                                     <Download className="w-3.5 h-3.5" />
-                                                   </button>
-                                                 </div>
-                                                  <div className="p-4 space-y-2">
-                                                    {items.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} onPrint={handlePrintTicket} />)}
-                                                  </div>
-                                               </div>
-                                             ))}
-                                           </motion.div>
-                                         )}
-                                       </AnimatePresence>
-                                     </div>
-                                   );
-                                 })}
-                               </motion.div>
-                             )}
-                           </AnimatePresence>
-                         </div>
-                       );
-                     })
-                   )}
-                </div>
-              )}
-
-              {activeTab === "reviews" && (
-                <div className="space-y-8 animate-in fade-in duration-500">
-                  <div className="flex items-center justify-between">
+            {activeTab === "seats" && (
+              <div className="space-y-10">
+                <div className="glass-card rounded-[2rem] p-5 border-border/50">
+                  <div className="flex items-center justify-between gap-4 mb-4">
                     <div>
-                      <h2 className="text-[1.75rem] font-bold text-foreground tracking-tight">Vessel Feedback</h2>
-                      <p className="text-muted-foreground text-sm mt-1">Passenger ratings and survey analytics for {currentShip?.name}.</p>
+                      <p className="text-[9px] font-black text-muted-foreground uppercase mb-1">Seat Availability</p>
+                      <p className="text-sm font-bold text-foreground">
+                        {selectedManifestDate
+                          ? new Date(selectedManifestDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", month: "short", day: "numeric", year: "numeric" })
+                          : "Select a date"}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="glass-card px-6 py-3 rounded-2xl flex items-center gap-3">
-                         <div className="flex items-center gap-1 text-amber-500">
-                            <Star className="w-5 h-5 fill-current" />
-                            <span className="text-xl font-bold">
-                              {reviews.length > 0 
-                                ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-                                : "0.0"}
-                            </span>
-                         </div>
-                         <div className="h-8 w-px bg-border/50" />
-                         <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none">
-                            <p>Average</p>
-                            <p className="mt-1">Rating</p>
-                         </div>
-                      </div>
-                    </div>
+                    <input type="date" value={selectedManifestDate} onChange={e => setSelectedManifestDate(e.target.value)}
+                      className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none" />
                   </div>
-
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {["ease", "clarity", "recommend"].map((qId) => {
-                      const counts: Record<string, number> = {};
-                      reviews.forEach(r => {
-                        const val = r.surveyData?.[qId];
-                        if (val) counts[val] = (counts[val] || 0) + 1;
-                      });
-                      const topAnswer = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-                      
-                      return (
-                        <div key={qId} className="glass-card rounded-[2rem] p-6 border-border/50">
-                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-4">
-                            {qId === 'ease' ? 'Booking Experience' : qId === 'clarity' ? 'Information Clarity' : 'Recommendation'}
-                          </p>
-                          {topAnswer ? (
-                            <>
-                              <h4 className="text-lg font-bold text-foreground mb-1">{topAnswer[0]}</h4>
-                              <p className="text-primary text-[10px] font-black uppercase tracking-wider">
-                                {Math.round((topAnswer[1] / reviews.length) * 100)}% of passengers
-                              </p>
-                            </>
-                          ) : (
-                            <p className="text-muted-foreground text-xs italic opacity-40">No data collected</p>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="flex flex-wrap gap-2 text-[9px] font-black uppercase tracking-widest">
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">Available</span>
+                    <span className="px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-500">Booked</span>
+                    <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500">Reserved</span>
+                    <span className="px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">Blocked</span>
                   </div>
+                </div>
+                {(() => {
+                  const regular = seats.filter(s => s.type === "seat");
 
-                  {/* Reviews List */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                      <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Recent Evaluations</h3>
-                      <div className="text-[9px] font-bold text-muted-foreground/40">{reviews.length} Responses</div>
-                    </div>
-                    {reviews.length === 0 ? (
-                      <div className="py-24 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-[0.3em]">
-                        Signal Deficit: No Feedback Recorded
-                      </div>
-                    ) : (
-                      <div className="grid gap-4">
-                        {reviews.map((r) => (
-                          <div key={r.id} className="glass-card p-6 rounded-[2rem] border-border/50 hover:border-primary/30 transition-all group">
-                            <div className="flex justify-between items-start mb-4">
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-2xl bg-muted flex items-center justify-center font-black text-foreground">
-                                  {r.passengerName ? r.passengerName.charAt(0) : "P"}
-                                </div>
-                                <div>
-                                  <p className="font-bold text-foreground text-sm tracking-tight">{r.passengerName || "Private Passenger"}</p>
-                                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider opacity-60">{new Date(r.createdAt).toLocaleDateString()}</p>
+
+                  // Sort berths numerically (U1, U2, ... U10) instead of alphabetically (U1, U10, U2)
+                  const sortBerths = (a: SeatGridRow, b: SeatGridRow) => {
+                    const numA = parseInt((a.label || "").replace(/\D/g, '')) || 0;
+                    const numB = parseInt((b.label || "").replace(/\D/g, '')) || 0;
+                    return numA - numB;
+                  };
+
+                  const up = seats.filter(s => s.type === "bunk-upper").sort(sortBerths);
+                  const lw = seats.filter(s => s.type === "bunk-lower").sort(sortBerths);
+
+                  const Seat = (s: SeatGridRow) => (
+                    <button key={s.id} onClick={() => s.status !== "booked" && s.status !== "reserved" && supabase.from("seats").update({ status: s.status === "blocked" ? "available" : "blocked" }).eq("id", s.id).then(() => loadShipData())}
+                      className={`p-3 rounded-2xl text-[10px] font-black flex flex-col items-center justify-center transition-all border w-16 h-16 shrink-0 ${s.status === "booked" ? "bg-red-500/10 border-red-500/20 text-red-500" : s.status === "reserved" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : s.status === "blocked" ? "bg-muted text-muted-foreground/30" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:scale-105"}`}>
+                      {s.status === "booked" ? <Users className="w-3 h-3 mb-1" /> : s.status === "reserved" ? <Wallet className="w-3 h-3 mb-1" /> : s.status === "blocked" ? <Lock className="w-3 h-3 mb-1" /> : <Armchair className="w-3 h-3 mb-1" />}
+                      {s.label}
+                    </button>
+                  );
+
+                  return (
+                    <div className="space-y-12">
+                      <section>
+                        <h3 className="text-[10px] font-black text-muted-foreground uppercase mb-6 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Seating Deck ({regular.length})</h3>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">{regular.map(Seat)}</div>
+                      </section>
+                      {up.length > 0 && (
+                        <section className="bg-muted/20 p-8 rounded-[3rem] border border-border/50">
+                          <h3 className="text-[10px] font-black text-muted-foreground uppercase mb-8 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Accommodation Berths ({up.length * 2})</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {up.map((ub, idx) => (
+                              <div key={idx} className="glass-card p-5 rounded-3xl border-border/50 flex flex-col gap-4 hover:border-amber-500/30 transition-colors">
+                                <div className="flex justify-between items-center"><p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Berth Suite {ub.label.replace('U', '')}</p><div className="flex gap-1"><div className="w-1 h-1 rounded-full bg-amber-500" /><div className="w-1 h-1 rounded-full bg-secondary" /></div></div>
+                                <div className="flex items-center gap-4 justify-center py-2 bg-background/20 rounded-2xl border border-border/10">
+                                  <div className="flex flex-col items-center gap-1"><span className="text-[7px] font-bold text-muted-foreground uppercase">Upper</span>{Seat(ub)}</div>
+                                  <div className="w-px h-10 bg-border/20 mx-2" />
+                                  {lw[idx] && <div className="flex flex-col items-center gap-1"><span className="text-[7px] font-bold text-muted-foreground uppercase">Lower</span>{Seat(lw[idx])}</div>}
                                 </div>
                               </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
+            {activeTab === "vessel" && (
+              <div className="space-y-8">
+                <div className="glass-card rounded-[3rem] p-10 relative overflow-hidden bg-gradient-to-br from-background to-muted/30 border-border/50">
+                  <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none transform rotate-12"><ShipIcon className="w-40 h-40" /></div>
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-12">
+                      <div><h2 className="text-4xl font-black text-foreground tracking-tighter mb-2">Vessel Architecture</h2><p className="text-sm text-muted-foreground font-medium">Technical specifications for {currentShip.name}</p></div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${currentShip.isConfirmed ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"} border`}>
+                          {currentShip.isConfirmed ? "Approved" : "Pending Confirmation"}
+                        </div>
+                        <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${currentShip.isActive ? "bg-secondary/10 text-secondary border-secondary/20" : "bg-destructive/10 text-destructive border-destructive/20"} border`}>
+                          {currentShip.isActive ? "Deployed" : "Staged (Internal Only)"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <InputField label="Operator Callsign" value={currentShip.name} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? { ...s, name: v } : s))} />
+                      <InputField label="Base Price (₱)" type="number" value={String(currentShip.price)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? { ...s, price: Number(v) } : s))} />
+                      <InputField label="Deck Seating" type="number" value={String(currentShip.totalSeats)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? { ...s, totalSeats: Number(v) } : s))} />
+                      <InputField label="Accommodation Suites" type="number" value={String(currentShip.totalBunks || 0)} onChange={v => setShips(ships.map(s => s.id === selectedShipId ? { ...s, totalBunks: Number(v) } : s))} />
+                    </div>
+
+                    {/* Route Matrix */}
+                    <div className="mt-12 space-y-6">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-xl font-black text-foreground tracking-tight">Navigation Matrix</h3>
+                          <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Define ports, schedules and leg pricing</p>
+                        </div>
+                        <button onClick={() => {
+                          const stops = getShipStops(currentShip);
+                          const next = [...stops, { location: "", arrival: "", departure: "", price: 0 }];
+                          setShips(ships.map(s => s.id === selectedShipId ? { ...s, stops: JSON.stringify(next) } : s));
+                        }} className="text-primary text-[10px] font-black uppercase hover:underline flex items-center gap-1"><Plus className="w-3 h-3" /> Add Stop</button>
+                      </div>
+                      <div className="space-y-4">
+                        {getShipStops(currentShip).map((s, idx) => (
+                          <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10 group">
+                            <div className="flex flex-col md:flex-row gap-4 items-end">
+                              <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : "Transit Stop"} value={s.location} onChange={v => {
+                                const next = getShipStops(currentShip);
+                                next[idx].location = v;
+                                setShips(ships.map(ship => ship.id === selectedShipId ? { ...ship, stops: JSON.stringify(next) } : ship));
+                              }} /></div>
+                              <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => {
+                                const next = getShipStops(currentShip);
+                                next[idx].arrival = v;
+                                setShips(ships.map(ship => ship.id === selectedShipId ? { ...ship, stops: JSON.stringify(next) } : ship));
+                              }} /></div>
+                              <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => {
+                                const next = getShipStops(currentShip);
+                                next[idx].departure = v;
+                                setShips(ships.map(ship => ship.id === selectedShipId ? { ...ship, stops: JSON.stringify(next) } : ship));
+                              }} /></div>
+                              <div className="w-full md:w-28"><InputField label="Leg ₱" type="number" value={String(s.price || 0)} onChange={v => {
+                                const next = getShipStops(currentShip);
+                                next[idx].price = Number(v);
+                                setShips(ships.map(ship => ship.id === selectedShipId ? { ...ship, stops: JSON.stringify(next) } : ship));
+                              }} /></div>
+                              <button onClick={() => {
+                                const next = getShipStops(currentShip);
+                                next.splice(idx, 1);
+                                setShips(ships.map(ship => ship.id === selectedShipId ? { ...ship, stops: JSON.stringify(next) } : ship));
+                              }} className="p-3 text-destructive mb-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-5 h-5" /></button>
+                            </div>
+
+                            {/* Weekly operation for this stop */}
+                            {(() => {
+                              const stopDays = s.scheduleDays?.trim() ? s.scheduleDays.split(",").map(d => d.trim()).filter(Boolean) : [...SCHEDULE_DAYS];
+                              const isDaily = stopDays.length >= SCHEDULE_DAYS.length;
+                              const setStopDays = (daysArr: string[]) => {
+                                const next = getShipStops(currentShip);
+                                next[idx].scheduleDays = daysArr.length ? daysArr.join(",") : undefined;
+                                setShips(ships.map(ship => ship.id === selectedShipId ? { ...ship, stops: JSON.stringify(next) } : ship));
+                              };
+                              return (
+                                <div className="mt-4 pt-4 border-t border-border/20">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{s.location || `Stop ${idx + 1}`} — Weekly Operation</p>
+                                    {!s.scheduleDays?.trim() && <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Defaults to Daily</span>}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <button
+                                      onClick={() => setStopDays(isDaily ? [] : [...SCHEDULE_DAYS])}
+                                      className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isDaily ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                    >
+                                      Daily
+                                    </button>
+                                    {SCHEDULE_DAYS.map(day => {
+                                      const active = stopDays.includes(day);
+                                      return (
+                                        <button
+                                          key={day}
+                                          onClick={() => {
+                                            const nextDays = active ? stopDays.filter(d => d !== day) : [...stopDays, day];
+                                            setStopDays(nextDays);
+                                          }}
+                                          className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${active ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                        >
+                                          {day}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-12 flex flex-col md:flex-row gap-4 pt-10 border-t border-border/30">
+                      <button onClick={handleUpdateVessel} disabled={loading} className="flex-[2] py-5 bg-primary text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes</button>
+
+                      {!currentShip.isConfirmed ? (
+                        <button disabled className="flex-1 px-8 rounded-3xl border border-amber-500/20 bg-amber-500/5 text-amber-500/50 text-[10px] uppercase font-black tracking-widest cursor-not-allowed">Awaiting Approval</button>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            if (!confirm("Are you sure you want to change the deployment status of this vessel?")) return;
+                            await toggleShipActive(currentShip.id, !currentShip.isActive);
+                            loadShips();
+                          }}
+                          className={`flex-1 px-8 rounded-3xl border font-black text-[10px] uppercase tracking-widest transition-all shadow-xl ${currentShip.isActive ? "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20" : "bg-secondary text-white border-secondary shadow-secondary/20 hover:scale-105"}`}
+                        >
+                          {currentShip.isActive ? "Deactivate Fleet" : "Deploy to Public"}
+                        </button>
+                      )}
+                    </div>
+                    {shipFormMsg && <p className="mt-6 text-center text-[10px] font-black text-secondary tracking-widest uppercase animate-pulse">{shipFormMsg}</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "staff" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center"><h3 className="text-[10px] font-black text-muted-foreground uppercase">Terminal Personnel</h3><button onClick={() => setAddingStaff(true)} className="px-5 py-2.5 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">Enroll Staff</button></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {staffList.filter(s => s.role === "scanner" && (s.shipIds?.includes(selectedShipId || "") || (s.shipIds?.length === 0))).map(s => (
+                    <StaffRow
+                      key={s.id}
+                      s={s}
+                      onRevoke={async (id) => {
+                        if (confirm("Revoke access?")) {
+                          try {
+                            await deleteStaff(id);
+                            getStaffList(adminType).then(setStaffList);
+                          } catch (err) {
+                            alert("Failed to revoke access: " + (err instanceof Error ? err.message : "Unknown error"));
+                          }
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "history" && (
+              <div className="space-y-10">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Trip Archives</h3>
+                  <History className="w-4 h-4 text-muted-foreground/30" />
+                </div>
+
+                {historyBookings.length === 0 ? (
+                  <div className="py-20 text-center glass-card rounded-[2.5rem] opacity-40 font-black text-xs uppercase tracking-widest border-dashed">
+                    Archive Empty
+                  </div>
+                ) : (
+                  Object.entries(groupByDate(historyBookings)).sort(([a], [b]) => b.localeCompare(a)).map(([year, months]) => {
+                    const isYearExpanded = expandedYears.includes(year);
+                    return (
+                      <div key={year} className="space-y-4">
+                        {/* Year Folder Header */}
+                        <button
+                          onClick={() => setExpandedYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year])}
+                          className="flex items-center gap-3 w-full group transition-all"
+                        >
+                          <div className={`px-4 py-1.5 rounded-full border text-[10px] font-black tracking-[0.2em] uppercase transition-all flex items-center gap-2 ${isYearExpanded ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" : "bg-primary/5 text-primary border-primary/20"
+                            }`}>
+                            {isYearExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            {year}
+                          </div>
+                          <div className={`flex-1 h-px bg-gradient-to-r transition-all ${isYearExpanded ? "from-primary/40 to-transparent" : "from-primary/10 to-transparent"}`} />
+                        </button>
+
+                        <AnimatePresence>
+                          {isYearExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden space-y-6"
+                            >
+                              {Object.entries(months).sort(([a], [b]) => b.localeCompare(a)).map(([month, days]) => {
+                                const monthKey = `${year}-${month}`;
+                                const isMonthExpanded = expandedMonths.includes(monthKey);
+                                return (
+                                  <div key={month} className="ml-4 pl-6 border-l border-border/30 space-y-4">
+                                    {/* Month Sub-header */}
+                                    <button
+                                      onClick={() => setExpandedMonths(prev => prev.includes(monthKey) ? prev.filter(m => m !== monthKey) : [...prev, monthKey])}
+                                      className={`flex items-center gap-2 w-full transition-all group ${isMonthExpanded ? "text-foreground" : "text-muted-foreground/60"}`}
+                                    >
+                                      <div className={`w-2 h-2 rounded-full transition-all ${isMonthExpanded ? "bg-primary scale-125 shadow-[0_0_8px_rgba(227, 0, 15,0.4)]" : "bg-muted-foreground/30"}`} />
+                                      <h4 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                                        {new Date(2000, parseInt(month) - 1).toLocaleString("default", { month: "long" })}
+                                        {isMonthExpanded ? <ChevronDown className="w-3 h-3 opacity-40" /> : <ChevronRight className="w-3 h-3 opacity-40" />}
+                                      </h4>
+                                    </button>
+
+                                    <AnimatePresence>
+                                      {isMonthExpanded && (
+                                        <motion.div
+                                          initial={{ height: 0, opacity: 0 }}
+                                          animate={{ height: "auto", opacity: 1 }}
+                                          exit={{ height: 0, opacity: 0 }}
+                                          className="overflow-hidden space-y-4"
+                                        >
+                                          {Object.entries(days).sort(([a], [b]) => b.localeCompare(a)).map(([day, items]) => (
+                                            <div key={day} className="glass-card rounded-[2rem] overflow-hidden border-border/30 hover:border-border transition-colors">
+                                              <div className="px-6 py-4 bg-muted/10 border-b border-border/30 flex justify-between items-center group/item">
+                                                <div className="flex items-center gap-3">
+                                                  <p className="text-[10px] font-black text-foreground uppercase tracking-wider">
+                                                    {new Date(`${year}-${month}-${day}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                                                  </p>
+                                                  <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
+                                                  <p className="text-[9px] font-black text-muted-foreground uppercase">{items.length} Records</p>
+                                                </div>
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); downloadCSV(items, `manifest-${year}-${month}-${day}`); }}
+                                                  className="p-2 rounded-xl text-primary hover:bg-primary/10 transition-all opacity-40 group-hover/item:opacity-100"
+                                                >
+                                                  <Download className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                              <div className="p-4 space-y-2">
+                                                {items.map(b => <BookingRow key={b.id} b={b} typeColor={typeColor} onPrint={handlePrintTicket} />)}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
+                                );
+                              })}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {activeTab === "reviews" && (
+              <div className="space-y-8 animate-in fade-in duration-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-[1.75rem] font-bold text-foreground tracking-tight">Vessel Feedback</h2>
+                    <p className="text-muted-foreground text-sm mt-1">Passenger ratings and survey analytics for {currentShip?.name}.</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="glass-card px-6 py-3 rounded-2xl flex items-center gap-3">
+                      <div className="flex items-center gap-1 text-amber-500">
+                        <Star className="w-5 h-5 fill-current" />
+                        <span className="text-xl font-bold">
+                          {reviews.length > 0
+                            ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+                            : "0.0"}
+                        </span>
+                      </div>
+                      <div className="h-8 w-px bg-border/50" />
+                      <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none">
+                        <p>Average</p>
+                        <p className="mt-1">Rating</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {[
+                    { id: "q1", label: "Q1: Real-time booking & seat reservation", category: "Functional Suitability" },
+                    { id: "q2", label: "Q2: Booking confirmation & digital ticket", category: "Functional Suitability" },
+                    { id: "q3", label: "Q3: QR code generation & gate scan validation", category: "Functional Suitability" },
+                    { id: "q4", label: "Q4: Website load speed & payment flow", category: "Performance Efficiency" },
+                    { id: "q5", label: "Q5: QR scan speed at boarding area", category: "Performance Efficiency" },
+                    { id: "q6", label: "Q6: Cross-browser consistency", category: "Compatibility" },
+                    { id: "q7", label: "Q7: Responsive screen size adaptivity", category: "Compatibility" },
+                    { id: "q8", label: "Q8: Admin payment confirmation & verification", category: "Compatibility" },
+                    { id: "q9", label: "Q9: Clean & intuitive UI navigation", category: "Usability" },
+                    { id: "q10", label: "Q10: Vessel seat selection map usability", category: "Usability" },
+                    { id: "q11", label: "Q11: Error & validation message guidance", category: "Usability" },
+                    { id: "q12", label: "Q12: Double-booking prevention", category: "Reliability" },
+                    { id: "q13", label: "Q13: Graceful error handling", category: "Reliability" },
+                    { id: "q14", label: "Q14: Booking & payment data accuracy", category: "Reliability" },
+                    { id: "q15", label: "Q15: Login & credential security", category: "Security" },
+                    { id: "q16", label: "Q16: Personal info privacy", category: "Security" },
+                    { id: "q17", label: "Q17: QR fraud & duplicate prevention", category: "Security" }
+                  ].map((q) => {
+                    const valueMap: Record<string, number> = {
+                      "Strongly Disagree": 1,
+                      "Disagree": 2,
+                      "Neutral": 3,
+                      "Agree": 4,
+                      "Strongly Agree": 5
+                    };
+
+                    let totalScore = 0;
+                    let answeredCount = 0;
+
+                    reviews.forEach(r => {
+                      const valStr = r.surveyData?.[q.id];
+                      if (valStr && valueMap[valStr] !== undefined) {
+                        totalScore += valueMap[valStr];
+                        answeredCount += 1;
+                      }
+                    });
+
+                    const avg = answeredCount > 0 ? (totalScore / answeredCount) : 0;
+
+                    return (
+                      <div key={q.id} className="glass-card rounded-2xl p-4 border border-border/40 shadow-xs relative overflow-hidden flex flex-col justify-between">
+                        <div>
+                          <span className="px-2 py-0.5 rounded-full border border-primary/20 text-primary text-[8px] font-bold bg-primary/5 uppercase tracking-widest leading-none">
+                            {q.category}
+                          </span>
+                          <h4 className="text-xs font-bold text-foreground mt-2.5 leading-snug line-clamp-2">{q.label}</h4>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-border/20">
+                          <div className="flex items-end justify-between">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-xl font-extrabold text-foreground">{avg > 0 ? avg.toFixed(2) : "0.00"}</span>
+                              <span className="text-[10px] text-muted-foreground font-semibold">/ 5.0</span>
+                            </div>
+                            <span className="text-[8px] text-muted-foreground/60 font-medium">
+                              {answeredCount} response{answeredCount !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-2 text-[9px] text-muted-foreground/50 font-semibold">
+                            <span>Total Score: <span className="text-foreground/70">{totalScore}</span></span>
+                            <span>|</span>
+                            <span>Sum: <span className="text-foreground/70">{totalScore}</span> / {answeredCount * 5}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Reviews List */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Recent Evaluations</h3>
+                    <div className="text-[9px] font-bold text-muted-foreground/40">{reviews.length} Responses</div>
+                  </div>
+                  {reviews.length === 0 ? (
+                    <div className="py-24 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-[0.3em]">
+                      Signal Deficit: No Feedback Recorded
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {reviews.map((r) => (
+                        <div key={r.id} className="glass-card p-6 rounded-[2rem] border-border/50 hover:border-primary/30 transition-all group">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-2xl bg-muted flex items-center justify-center font-black text-foreground">
+                                {r.passengerName ? r.passengerName.charAt(0) : "P"}
+                              </div>
+                              <div>
+                                <p className="font-bold text-foreground text-sm tracking-tight">{r.passengerName || "Private Passenger"}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider opacity-60">{new Date(r.createdAt).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <div className="flex gap-0.5">
                                 {[1, 2, 3, 4, 5].map((star) => (
                                   <Star key={star} className={`w-3 h-3 ${star <= r.rating ? "fill-amber-500 text-amber-500" : "text-slate-400"}`} />
                                 ))}
                               </div>
-                            </div>
-                            
-                            {r.comment && (
-                              <div className="bg-muted/30 rounded-2xl p-4 mb-4 border border-border/30">
-                                <p className="text-xs text-foreground/80 font-medium italic">"{r.comment}"</p>
-                              </div>
-                            )}
-
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                              {Object.entries(r.surveyData || {}).map(([q, a]) => (
-                                <div key={q} className="bg-background/40 rounded-xl px-3 py-2 border border-border/20 shadow-sm">
-                                  <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5 truncate">
-                                    {q.replace(/_/g, " ")}
-                                  </p>
-                                  <p className="text-[10px] text-foreground font-bold truncate">{a}</p>
-                                </div>
-                              ))}
+                              <button
+                                onClick={async () => {
+                                  if (!confirm("Delete this evaluation?")) return;
+                                  try {
+                                    await deleteReview(r.id);
+                                    setReviews(prev => prev.filter(rev => rev.id !== r.id));
+                                  } catch (err) {
+                                    alert("Failed to delete: " + (err instanceof Error ? err.message : "Unknown error"));
+                                  }
+                                }}
+                                className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
-              {activeTab === "reservations" && (
-                <div className="space-y-4">
-                  <div className="glass-card rounded-[2rem] p-6 border-border/50">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h2 className="text-lg font-black text-foreground tracking-tight">Counter Reservations</h2>
-                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">All unpaid reservations for this vessel (any sailing date) — collect payment to confirm</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="px-4 py-1.5 glass-card rounded-full text-[10px] font-black text-primary border-primary/20 uppercase tracking-widest">
-                          {allReservations.length} Pending
+                          {r.comment && (
+                            <div className="bg-muted/30 rounded-2xl p-4 mb-4 border border-border/30">
+                              <p className="text-xs text-foreground/80 font-medium italic">"{r.comment}"</p>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {Object.entries(r.surveyData || {}).map(([q, a]) => (
+                              <div key={q} className="bg-background/40 rounded-xl px-3 py-2 border border-border/20 shadow-sm">
+                                <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5 truncate">
+                                  {q.replace(/_/g, " ")}
+                                </p>
+                                <p className="text-[10px] text-foreground font-bold truncate">{a}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <button onClick={loadShipData} className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary" title="Refresh">
-                          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-muted-foreground/50 absolute left-4 top-1/2 -translate-y-1/2" />
-                      <input value={reservationSearch} onChange={e => setReservationSearch(e.target.value)} placeholder="Search by passenger name or code (SPT-...)"
-                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-                    </div>
-                  </div>
-
-                  {filteredReservations.length === 0 ? (
-                    <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">
-                      {allReservations.length === 0 ? "No Reservations" : "No match found"}
-                    </div>
-                  ) : (
-                    <div className="grid gap-3">
-                      {filteredReservations.map(b => (
-                        <ReservationRow key={b.id} b={b} onSelect={() => { setScanGroup([b]); setScanBooking(b); }} />
                       ))}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
+            )}
 
-              {activeTab === "scan" && (
-                <div className="space-y-4">
-                  <div className="glass-card rounded-[2rem] p-6 border-border/50">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h2 className="text-lg font-black text-foreground tracking-tight">Counter Scanner</h2>
-                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">Scan a reservation QR → approve payment → activate the boarding code</p>
-                      </div>
-                      <button onClick={scanCameraActive ? stopScanCamera : startScanCamera} disabled={scanStarting}
-                        className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-60 ${scanCameraActive ? "bg-destructive/15 text-destructive border border-destructive/30" : "bg-primary text-white shadow-lg shadow-primary/20"}`}>
-                        {scanStarting ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting...</> :
-                          scanCameraActive ? <><CameraOff className="w-4 h-4" /> Stop</> :
-                            <><Camera className="w-4 h-4" /> Start Camera</>}
-                      </button>
-                    </div>
-
-                    <div className={`relative rounded-2xl overflow-hidden bg-black ${scanCameraActive ? "block" : "hidden"}`} style={{ minHeight: "320px" }}>
-                      <div id="admin-qr-reader" className="w-full h-full absolute inset-0 [&>video]:object-cover [&>video]:h-full" />
-                    </div>
-
-                    {!scanCameraActive && !scanStarting && (
-                      <div className="text-center py-8">
-                        <ScanLine className="w-12 h-12 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">Tap Start to scan a reservation QR</p>
-                      </div>
-                    )}
-                    {scanProcessing && (
-                      <div className="flex items-center justify-center gap-2 py-3 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Looking up booking...</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="glass-card rounded-[2rem] p-6 border-border/50">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Keyboard className="w-5 h-5 text-primary" />
-                      <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Manual Entry</h3>
-                    </div>
-                    <div className="flex gap-2">
-                      <input value={scanManualCode} onChange={e => setScanManualCode(e.target.value)} placeholder="SPT-XXXXXXXXXXXX"
-                        className="flex-1 px-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono text-sm"
-                        onKeyDown={(e) => e.key === "Enter" && handleScanManual()} />
-                      <button onClick={handleScanManual} disabled={scanProcessing}
-                        className="px-6 py-3 rounded-xl bg-primary text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition-all flex items-center gap-2 disabled:opacity-60">
-                        <ScanLine className="w-4 h-4" /> Look Up
-                      </button>
-                    </div>
-                  </div>
-
-                  {scanError && (
-                    <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive text-sm text-center font-bold">
-                      {scanError}
-                    </div>
-                  )}
-                  {scanSuccessMsg && (
-                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-sm text-center font-bold flex items-center justify-center gap-2">
-                      <CheckCircle className="w-4 h-4" /> {scanSuccessMsg}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === "verification" && (
-                <div className="space-y-8">
-                  <div className="flex items-center justify-between px-1">
+            {activeTab === "reservations" && (
+              <div className="space-y-4">
+                <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                  <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-xl font-black text-foreground tracking-tighter">Identity Control</h2>
-                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60">Pending manual review for discount eligibility</p>
+                      <h2 className="text-lg font-black text-foreground tracking-tight">Counter Reservations</h2>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">All unpaid reservations for this vessel (any sailing date) — collect payment to confirm</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <div className="px-4 py-1.5 glass-card rounded-full text-[10px] font-black text-primary border-primary/20 uppercase tracking-widest">
+                        {allReservations.length} Pending
+                      </div>
                       <button onClick={loadShipData} className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary" title="Refresh">
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                       </button>
-                      <div className="px-4 py-1.5 glass-card rounded-full text-[10px] font-black text-primary border-primary/20 uppercase tracking-widest">
-                        {verificationBookings.length} Requests
-                      </div>
                     </div>
                   </div>
 
-                  {verificationBookings.length === 0 ? (
-                    <div className="py-24 text-center glass-card rounded-[3rem] border-dashed opacity-40 flex flex-col items-center">
-                       <CheckCircle className="w-16 h-16 mb-4 text-emerald-500/20" />
-                       <p className="text-xs font-black text-muted-foreground uppercase tracking-[0.3em]">Clear Horizon: No Pending Verifications</p>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-muted-foreground/50 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input value={reservationSearch} onChange={e => setReservationSearch(e.target.value)} placeholder="Search by passenger name or code (SPT-...)"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                  </div>
+                </div>
+
+                {filteredReservations.length === 0 ? (
+                  <div className="py-20 text-center glass-card rounded-[2.5rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">
+                    {allReservations.length === 0 ? "No Reservations" : "No match found"}
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {filteredReservations.map(b => (
+                      <ReservationRow key={b.id} b={b} onSelect={() => { setScanGroup([b]); setScanBooking(b); }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "scan" && (
+              <div className="space-y-4">
+                <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-lg font-black text-foreground tracking-tight">Counter Scanner</h2>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">Scan a reservation QR → approve payment → activate the boarding code</p>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {verificationBookings.map((b) => (
-                        <div key={b.id} className="glass-card rounded-[2.5rem] overflow-hidden border-border/50 flex flex-col group transition-all hover:border-primary/30">
-                          {/* Image Preview Container - Now fully clickable */}
-                          <div 
-                            className="aspect-video w-full bg-black/40 relative overflow-hidden cursor-pointer group"
-                            onClick={() => b.id_image_url && window.open(b.id_image_url, "_blank")}
-                          >
-                            {b.id_image_url && b.id_image_url !== "null" ? (
-                              <img 
-                                src={b.id_image_url} 
-                                alt="ID Preview" 
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const parent = e.currentTarget.parentElement;
-                                  if (parent) {
-                                    parent.classList.add('flex', 'items-center', 'justify-center', 'flex-col', 'gap-2');
-                                    // Only add the fallback if it doesn't already exist
-                                    if (!parent.querySelector('.fallback-icon')) {
-                                      parent.insertAdjacentHTML('beforeend', '<svg class="w-10 h-10 opacity-20 fallback-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg><p class="text-[8px] font-black uppercase tracking-widest opacity-40">Image Unavailable (Check Bucket Privacy)</p>');
-                                    }
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
-                                <ImageIcon className="w-10 h-10 opacity-20" />
-                                <p className="text-[8px] font-black uppercase tracking-widest opacity-40">No Image Data</p>
-                              </div>
-                            )}
-                            
-                            {/* Hover Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
-                              <div className="px-4 py-2 bg-white text-black rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xl scale-90 group-hover:scale-100 transition-transform">
-                                Click to Expand
-                              </div>
-                            </div>
+                    <button onClick={scanCameraActive ? stopScanCamera : startScanCamera} disabled={scanStarting}
+                      className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-60 ${scanCameraActive ? "bg-destructive/15 text-destructive border border-destructive/30" : "bg-primary text-white shadow-lg shadow-primary/20"}`}>
+                      {scanStarting ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting...</> :
+                        scanCameraActive ? <><CameraOff className="w-4 h-4" /> Stop</> :
+                          <><Camera className="w-4 h-4" /> Start Camera</>}
+                    </button>
+                  </div>
 
-                            <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[9px] font-bold text-white uppercase tracking-widest border border-white/10 z-10">
-                              {b.passenger_type}
-                            </div>
-                          </div>
+                  <div className={`relative rounded-2xl overflow-hidden bg-black ${scanCameraActive ? "block" : "hidden"}`} style={{ minHeight: "320px" }}>
+                    <div id="admin-qr-reader" className="w-full h-full absolute inset-0 [&>video]:object-cover [&>video]:h-full" />
+                  </div>
 
-                          {/* Details */}
-                          <div className="p-6">
-                            <div className="mb-6">
-                              <h4 className="text-lg font-black text-foreground tracking-tight leading-none mb-1">{b.passenger_name}</h4>
-                              <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60">
-                                Vessel: {allShipsForMapping.find(s => s.id === b.ship_id)?.name || "External Vessel"} | Contact: {b.phone}
-                              </p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-8">
-                              <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
-                                <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Vessel Route</p>
-                                <p className="text-[10px] font-bold text-foreground truncate">{b.board_stop} → {b.alight_stop}</p>
-                              </div>
-                              <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
-                                <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Trip Date</p>
-                                <p className="text-[10px] font-bold text-foreground">{b.trip_date}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                              <button 
-                                onClick={() => handleVerifyIdentity(b.id)}
-                                disabled={loading}
-                                className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                                Approve
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  setRejectingBookingId(b.id);
-                                  setShowRejectModal(true);
-                                }}
-                                disabled={loading}
-                                className="px-6 py-4 glass-card text-destructive rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-destructive/10 active:scale-95 transition-all border border-destructive/20"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  {!scanCameraActive && !scanStarting && (
+                    <div className="text-center py-8">
+                      <ScanLine className="w-12 h-12 text-muted-foreground/30 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Tap Start to scan a reservation QR</p>
+                    </div>
+                  )}
+                  {scanProcessing && (
+                    <div className="flex items-center justify-center gap-2 py-3 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Looking up booking...</span>
                     </div>
                   )}
                 </div>
-              )}
-           </main>
+
+                <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Keyboard className="w-5 h-5 text-primary" />
+                    <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Manual Entry</h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <input value={scanManualCode} onChange={e => setScanManualCode(e.target.value)} placeholder="SPT-XXXXXXXXXXXX"
+                      className="flex-1 px-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono text-sm"
+                      onKeyDown={(e) => e.key === "Enter" && handleScanManual()} />
+                    <button onClick={handleScanManual} disabled={scanProcessing}
+                      className="px-6 py-3 rounded-xl bg-primary text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition-all flex items-center gap-2 disabled:opacity-60">
+                      <ScanLine className="w-4 h-4" /> Look Up
+                    </button>
+                  </div>
+                </div>
+
+                {scanError && (
+                  <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive text-sm text-center font-bold">
+                    {scanError}
+                  </div>
+                )}
+                {scanSuccessMsg && (
+                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-sm text-center font-bold flex items-center justify-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> {scanSuccessMsg}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "verification" && (
+              <div className="space-y-8">
+                <div className="flex items-center justify-between px-1">
+                  <div>
+                    <h2 className="text-xl font-black text-foreground tracking-tighter">Identity Control</h2>
+                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60">Pending manual review for discount eligibility</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={loadShipData} className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary" title="Refresh">
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
+                    <div className="px-4 py-1.5 glass-card rounded-full text-[10px] font-black text-primary border-primary/20 uppercase tracking-widest">
+                      {verificationBookings.length} Requests
+                    </div>
+                  </div>
+                </div>
+
+                {verificationBookings.length === 0 ? (
+                  <div className="py-24 text-center glass-card rounded-[3rem] border-dashed opacity-40 flex flex-col items-center">
+                    <CheckCircle className="w-16 h-16 mb-4 text-emerald-500/20" />
+                    <p className="text-xs font-black text-muted-foreground uppercase tracking-[0.3em]">Clear Horizon: No Pending Verifications</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {verificationBookings.map((b) => (
+                      <div key={b.id} className="glass-card rounded-[2.5rem] overflow-hidden border-border/50 flex flex-col group transition-all hover:border-primary/30">
+                        {/* Image Preview Container - Now fully clickable */}
+                        <div
+                          className="aspect-video w-full bg-black/40 relative overflow-hidden cursor-pointer group"
+                          onClick={() => b.id_image_url && window.open(b.id_image_url, "_blank")}
+                        >
+                          {b.id_image_url && b.id_image_url !== "null" ? (
+                            <img
+                              src={b.id_image_url}
+                              alt="ID Preview"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) {
+                                  parent.classList.add('flex', 'items-center', 'justify-center', 'flex-col', 'gap-2');
+                                  // Only add the fallback if it doesn't already exist
+                                  if (!parent.querySelector('.fallback-icon')) {
+                                    parent.insertAdjacentHTML('beforeend', '<svg class="w-10 h-10 opacity-20 fallback-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg><p class="text-[8px] font-black uppercase tracking-widest opacity-40">Image Unavailable (Check Bucket Privacy)</p>');
+                                  }
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
+                              <ImageIcon className="w-10 h-10 opacity-20" />
+                              <p className="text-[8px] font-black uppercase tracking-widest opacity-40">No Image Data</p>
+                            </div>
+                          )}
+
+                          {/* Hover Overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
+                            <div className="px-4 py-2 bg-white text-black rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xl scale-90 group-hover:scale-100 transition-transform">
+                              Click to Expand
+                            </div>
+                          </div>
+
+                          <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[9px] font-bold text-white uppercase tracking-widest border border-white/10 z-10">
+                            {b.passenger_type}
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="p-6">
+                          <div className="mb-6">
+                            <h4 className="text-lg font-black text-foreground tracking-tight leading-none mb-1">{b.passenger_name}</h4>
+                            <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60">
+                              Vessel: {allShipsForMapping.find(s => s.id === b.ship_id)?.name || "External Vessel"} | Contact: {b.phone}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
+                              <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Vessel Route</p>
+                              <p className="text-[10px] font-bold text-foreground truncate">{b.board_stop} → {b.alight_stop}</p>
+                            </div>
+                            <div className="bg-muted/30 rounded-2xl p-3 border border-border/20">
+                              <p className="text-[8px] text-muted-foreground font-black uppercase tracking-tighter mb-0.5">Trip Date</p>
+                              <p className="text-[10px] font-bold text-foreground">{b.trip_date}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => handleVerifyIdentity(b.id)}
+                              disabled={loading}
+                              className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRejectingBookingId(b.id);
+                                setShowRejectModal(true);
+                              }}
+                              disabled={loading}
+                              className="px-6 py-4 glass-card text-destructive rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-destructive/10 active:scale-95 transition-all border border-destructive/20"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
         </div>
       ) : (
         <div className="py-32 text-center glass-card rounded-[3rem] border-dashed opacity-40 flex flex-col items-center">
-           <ShipIcon className="w-20 h-20 mb-6 opacity-10" />
-           <p className="text-xs font-black text-muted-foreground uppercase tracking-[0.3em]">Authorized Vessel Selection Required</p>
+          <ShipIcon className="w-20 h-20 mb-6 opacity-10" />
+          <p className="text-xs font-black text-muted-foreground uppercase tracking-[0.3em]">Authorized Vessel Selection Required</p>
         </div>
       )}
 
       {/* Staff Modal */}
       <AnimatePresence>
-         {addingStaff && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/95 backdrop-blur-xl">
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass-card w-full max-w-sm rounded-[3rem] p-10 border-border/50 relative">
-                 <button onClick={() => setAddingStaff(false)} className="absolute top-8 right-8 p-1 text-muted-foreground hover:text-foreground"><X className="w-6 h-6" /></button>
-                 <h2 className="text-3xl font-black text-foreground tracking-tighter mb-10">Staff Registry</h2>
-                 <div className="flex flex-col gap-6">
-                    <InputField label="Personnel Name" value={newName} onChange={setNewName} placeholder="Identity name" />
-                    <InputField label="Service Identity (Email)" value={newEmail} onChange={setNewEmail} placeholder="Endpoint access" />
-                    <div className="relative"><InputField label="Security Key" type={showPass ? "text" : "password"} value={newPass} onChange={setNewPass} placeholder="••••••••" /><button onClick={() => setShowPass(!showPass)} className="absolute bottom-4 right-4 p-1 text-muted-foreground">{showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button></div>
-                    {staffMsg && <p className="text-[10px] font-black text-center text-secondary uppercase animate-bounce">{staffMsg}</p>}
-                    <button 
-                       onClick={handleAddStaff} 
-                       disabled={isSavingStaff}
-                       className="py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:brightness-110 flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                       {isSavingStaff ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                       {isSavingStaff ? "Enrolling..." : "Enroll Staff"}
-                    </button>
-                 </div>
-              </motion.div>
-           </div>
-         )}
+        {addingStaff && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/95 backdrop-blur-xl">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass-card w-full max-w-sm rounded-[3rem] p-10 border-border/50 relative">
+              <button onClick={() => setAddingStaff(false)} className="absolute top-8 right-8 p-1 text-muted-foreground hover:text-foreground"><X className="w-6 h-6" /></button>
+              <h2 className="text-3xl font-black text-foreground tracking-tighter mb-10">Staff Registry</h2>
+              <div className="flex flex-col gap-6">
+                <InputField label="Personnel Name" value={newName} onChange={setNewName} placeholder="Identity name" />
+                <InputField label="Service Identity (Email)" value={newEmail} onChange={setNewEmail} placeholder="Endpoint access" />
+                <div className="relative"><InputField label="Security Key" type={showPass ? "text" : "password"} value={newPass} onChange={setNewPass} placeholder="••••••••" /><button onClick={() => setShowPass(!showPass)} className="absolute bottom-4 right-4 p-1 text-muted-foreground">{showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button></div>
+                {staffMsg && <p className="text-[10px] font-black text-center text-secondary uppercase animate-bounce">{staffMsg}</p>}
+                <button
+                  onClick={handleAddStaff}
+                  disabled={isSavingStaff}
+                  className="py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:brightness-110 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSavingStaff ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                  {isSavingStaff ? "Enrolling..." : "Enroll Staff"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Ship Proposal Modal */}
       <AnimatePresence>
-         {showShipCreate && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/98 backdrop-blur-2xl overflow-y-auto">
-              <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="glass-card w-full max-w-2xl rounded-[3rem] p-10 border-border/50 my-10 relative">
-                 <button onClick={() => setShowShipCreate(false)} className="absolute top-8 right-8 p-3 text-muted-foreground hover:text-foreground"><X className="w-6 h-6" /></button>
-                 <div className="flex items-center gap-6 mb-12">
-                    <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary"><ShipIcon className="w-8 h-8" /></div>
-                    <div><h2 className="text-4xl font-black text-foreground tracking-tighter mb-1 font-display">Vessel Request</h2><p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Pending centralized command approval</p></div>
-                 </div>
-                 <div className="space-y-10">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><InputField label="Vessel Callsign" value={newShipModel.name} onChange={v => setNewShipModel({...newShipModel, name: v})} /><InputField label="Class Type" value={newShipModel.type} onChange={() => {}} placeholder={newShipModel.type} /></div>
-                    <div className="space-y-6">
-                       <div className="flex justify-between items-center"><p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Navigation Matrix</p><button onClick={() => setNewShipModel({...newShipModel, stops: [...newShipModel.stops, { location: "", arrival: "", departure: "" }]})} className="text-primary text-[10px] font-black uppercase hover:underline">+ Add Stop</button></div>
-                       <div className="space-y-4">
-                           {newShipModel.stops.map((s: StopForm, idx: number) => (
-                             <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10">
-                                <div className="flex flex-col md:flex-row gap-4 items-end">
-                                   <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : idx === newShipModel.stops.length-1 ? "Destination" : `Node #${idx+1}`} value={s.location} onChange={v => handleStopChange(idx, "location", v)} /></div>
-                                   <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => handleStopChange(idx, "arrival", v)} /></div>
-                                   <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => handleStopChange(idx, "departure", v)} /></div>
-                                   {newShipModel.stops.length > 2 && <button onClick={() => { const next = [...newShipModel.stops]; next.splice(idx,1); setNewShipModel({...newShipModel, stops: next}); }} className="p-3 text-destructive mb-1"><Trash2 className="w-5 h-5" /></button>}
-                                </div>
+        {showShipCreate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-background/98 backdrop-blur-2xl overflow-y-auto">
+            <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="glass-card w-full max-w-2xl rounded-[3rem] p-10 border-border/50 my-10 relative">
+              <button onClick={() => setShowShipCreate(false)} className="absolute top-8 right-8 p-3 text-muted-foreground hover:text-foreground"><X className="w-6 h-6" /></button>
+              <div className="flex items-center gap-6 mb-12">
+                <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary"><ShipIcon className="w-8 h-8" /></div>
+                <div><h2 className="text-4xl font-black text-foreground tracking-tighter mb-1 font-display">Vessel Request</h2><p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Pending centralized command approval</p></div>
+              </div>
+              <div className="space-y-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><InputField label="Vessel Callsign" value={newShipModel.name} onChange={v => setNewShipModel({ ...newShipModel, name: v })} /><InputField label="Class Type" value={newShipModel.type} onChange={() => { }} placeholder={newShipModel.type} /></div>
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center"><p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Navigation Matrix</p><button onClick={() => setNewShipModel({ ...newShipModel, stops: [...newShipModel.stops, { location: "", arrival: "", departure: "" }] })} className="text-primary text-[10px] font-black uppercase hover:underline">+ Add Stop</button></div>
+                  <div className="space-y-4">
+                    {newShipModel.stops.map((s: StopForm, idx: number) => (
+                      <div key={idx} className="p-5 glass-card rounded-3xl border-border/30 bg-muted/10">
+                        <div className="flex flex-col md:flex-row gap-4 items-end">
+                          <div className="flex-1 w-full"><InputField label={idx === 0 ? "Initial Port" : idx === newShipModel.stops.length - 1 ? "Destination" : `Node #${idx + 1}`} value={s.location} onChange={v => handleStopChange(idx, "location", v)} /></div>
+                          <div className="w-full md:w-28"><InputField label="Arrival" value={s.arrival} onChange={v => handleStopChange(idx, "arrival", v)} /></div>
+                          <div className="w-full md:w-28"><InputField label="Departure" value={s.departure} onChange={v => handleStopChange(idx, "departure", v)} /></div>
+                          {newShipModel.stops.length > 2 && <button onClick={() => { const next = [...newShipModel.stops]; next.splice(idx, 1); setNewShipModel({ ...newShipModel, stops: next }); }} className="p-3 text-destructive mb-1"><Trash2 className="w-5 h-5" /></button>}
+                        </div>
 
-                                {/* Weekly operation for this stop */}
-                                {(() => {
-                                    const stopDays = s.scheduleDays?.trim() ? s.scheduleDays.split(",").map((d: string) => d.trim()).filter(Boolean) : [...SCHEDULE_DAYS];
-                                   const isDaily = stopDays.length >= SCHEDULE_DAYS.length;
-                                   const setStopDays = (daysArr: string[]) => {
-                                      const next = [...newShipModel.stops];
-                                      next[idx] = { ...next[idx], scheduleDays: daysArr.length ? daysArr.join(",") : undefined };
-                                      setNewShipModel({...newShipModel, stops: next});
-                                   };
-                                   return (
-                                      <div className="mt-4 pt-4 border-t border-border/20">
-                                         <div className="flex items-center gap-2 mb-2">
-                                            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{s.location || `Stop ${idx + 1}`} — Weekly Operation</p>
-                                            {!s.scheduleDays?.trim() && <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Defaults to Daily</span>}
-                                         </div>
-                                         <div className="flex flex-wrap gap-1.5">
-                                            <button
-                                               onClick={() => setStopDays(isDaily ? [] : [...SCHEDULE_DAYS])}
-                                               className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isDaily ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
-                                            >
-                                               Daily
-                                            </button>
-                                            {SCHEDULE_DAYS.map(day => {
-                                               const active = stopDays.includes(day);
-                                               return (
-                                                  <button
-                                                     key={day}
-                                                     onClick={() => {
-                                                        const nextDays = active ? stopDays.filter(d => d !== day) : [...stopDays, day];
-                                                        setStopDays(nextDays);
-                                                     }}
-                                                     className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${active ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
-                                                  >
-                                                     {day}
-                                                  </button>
-                                               );
-                                            })}
-                                         </div>
-                                      </div>
-                                   );
-                                })()}
-                             </div>
-                          ))}
-                       </div>
-                    </div>
-                     <div className="grid grid-cols-2 gap-8"><InputField label="Proposed Tariff" type="number" value={String(newShipModel.price)} onChange={v => setNewShipModel({...newShipModel, price: Number(v)})} /><InputField label="Deck Seating" type="number" value={String(newShipModel.totalSeats)} onChange={v => setNewShipModel({...newShipModel, totalSeats: Number(v)})} /></div>
-                    {shipFormMsg && <p className="text-[10px] font-black text-center text-secondary uppercase animate-pulse">{shipFormMsg}</p>}
-                    <button onClick={handleRequestShip} disabled={requestingShip} className="w-full py-5 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-primary/20 hover:scale-[1.01] active:scale-[0.98] transition-all">Submit Request</button>
-                 </div>
-              </motion.div>
-           </div>
-         )}
+                        {/* Weekly operation for this stop */}
+                        {(() => {
+                          const stopDays = s.scheduleDays?.trim() ? s.scheduleDays.split(",").map((d: string) => d.trim()).filter(Boolean) : [...SCHEDULE_DAYS];
+                          const isDaily = stopDays.length >= SCHEDULE_DAYS.length;
+                          const setStopDays = (daysArr: string[]) => {
+                            const next = [...newShipModel.stops];
+                            next[idx] = { ...next[idx], scheduleDays: daysArr.length ? daysArr.join(",") : undefined };
+                            setNewShipModel({ ...newShipModel, stops: next });
+                          };
+                          return (
+                            <div className="mt-4 pt-4 border-t border-border/20">
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{s.location || `Stop ${idx + 1}`} — Weekly Operation</p>
+                                {!s.scheduleDays?.trim() && <span className="text-[8px] text-primary/70 font-bold uppercase tracking-wider">Defaults to Daily</span>}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  onClick={() => setStopDays(isDaily ? [] : [...SCHEDULE_DAYS])}
+                                  className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isDaily ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                >
+                                  Daily
+                                </button>
+                                {SCHEDULE_DAYS.map(day => {
+                                  const active = stopDays.includes(day);
+                                  return (
+                                    <button
+                                      key={day}
+                                      onClick={() => {
+                                        const nextDays = active ? stopDays.filter(d => d !== day) : [...stopDays, day];
+                                        setStopDays(nextDays);
+                                      }}
+                                      className={`px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${active ? "bg-primary text-white border-primary" : "glass-card text-muted-foreground border-border/50 hover:border-primary/30"}`}
+                                    >
+                                      {day}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-8"><InputField label="Proposed Tariff" type="number" value={String(newShipModel.price)} onChange={v => setNewShipModel({ ...newShipModel, price: Number(v) })} /><InputField label="Deck Seating" type="number" value={String(newShipModel.totalSeats)} onChange={v => setNewShipModel({ ...newShipModel, totalSeats: Number(v) })} /></div>
+                {shipFormMsg && <p className="text-[10px] font-black text-center text-secondary uppercase animate-pulse">{shipFormMsg}</p>}
+                <button onClick={handleRequestShip} disabled={requestingShip} className="w-full py-5 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-primary/20 hover:scale-[1.01] active:scale-[0.98] transition-all">Submit Request</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Counter Approval Modal */}
@@ -1535,7 +1590,7 @@ const AdminDashboard = () => {
                 <div className="w-10 h-10 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500"><ShieldAlert className="w-5 h-5" /></div>
                 <div><h3 className="text-xl font-black tracking-tight">Reject ID</h3><p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">Specify reason for passenger</p></div>
               </div>
-              
+
               <div className="space-y-4">
                 {[
                   "Invalid ID Document",
@@ -1544,7 +1599,7 @@ const AdminDashboard = () => {
                   "Expired Identification",
                   "Incorrect Category"
                 ].map(reason => (
-                  <button 
+                  <button
                     key={reason}
                     onClick={() => setRejectReason(reason)}
                     className={`w-full p-4 rounded-2xl text-xs font-bold text-left transition-all border ${rejectReason === reason ? "bg-primary/10 border-primary text-primary" : "bg-muted/30 border-border/50 text-muted-foreground hover:border-primary/30"}`}
@@ -1554,7 +1609,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
 
-              <button 
+              <button
                 onClick={handleRejectIdentity}
                 disabled={loading}
                 className="w-full py-4 mt-8 bg-destructive text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-destructive/20 hover:brightness-110 active:scale-95 flex items-center justify-center gap-2"

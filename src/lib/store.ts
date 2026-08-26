@@ -264,11 +264,11 @@ export async function sendIprogSMS(phone: string, message: string) {
     // Ensure phone is starting with 0 or 63
     let formattedPhone = phone;
     if (phone.startsWith("+63")) formattedPhone = "0" + phone.slice(3);
-    
+
     formData.append("recipient", formattedPhone);
     formData.append("phone_number", formattedPhone);
     formData.append("message", message);
-    
+
     // Use proxy setup in vite.config.ts to avoid browser CORS issues
     // Using the correct endpoint from the iProg documentation
     const res = await fetch("/iprog-api/api/v1/sms_messages", {
@@ -279,13 +279,13 @@ export async function sendIprogSMS(phone: string, message: string) {
       },
       body: formData.toString()
     });
-    
+
     if (!res.ok) {
-        const errorText = await res.text();
-        console.error("iProg SMS API failed with status", res.status, errorText);
-        throw new Error(`SMS API Error: ${res.statusText} - ${errorText}`);
+      const errorText = await res.text();
+      console.error("iProg SMS API failed with status", res.status, errorText);
+      throw new Error(`SMS API Error: ${res.statusText} - ${errorText}`);
     }
-    
+
     const data = await res.json();
     return data;
   } catch (err) {
@@ -353,23 +353,23 @@ export async function sendEmailjsIDStatus(email: string, name: string, status: "
       template_id: templateId,
       user_id: publicKey,
       template_params: {
-          'to_email': email,
-          'email': email,
-          'user_email': email,
-          'to_name': name,
-          'passenger_name': name,
-          'status': status.toUpperCase(),
-          'reason': reason || 'N/A',
-          'message': status === "verified" 
-            ? "Good news! Your identity has been verified. Your discount is now active, and you can proceed with your payment."
-            : `Unfortunately, your identity verification was rejected. Reason: ${reason || 'Invalid ID'}. You can try uploading a new one or proceed as a regular passenger.`
+        'to_email': email,
+        'email': email,
+        'user_email': email,
+        'to_name': name,
+        'passenger_name': name,
+        'status': status.toUpperCase(),
+        'reason': reason || 'N/A',
+        'message': status === "verified"
+          ? "Good news! Your identity has been verified. Your discount is now active, and you can proceed with your payment."
+          : `Unfortunately, your identity verification was rejected. Reason: ${reason || 'Invalid ID'}. You can try uploading a new one or proceed as a regular passenger.`
       }
     };
 
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
     });
 
     return res.ok;
@@ -387,30 +387,30 @@ export async function sendEmailjsOTP(email: string, otp: string, templateId?: st
       template_id: templateId || EMAILJS_TEMPLATE_ID,
       user_id: EMAILJS_PUBLIC_KEY,
       template_params: {
-          'email': email,
-          'to_email': email,
-          'user_email': email,
-          'passcode': otp,
-          'otp_code': otp,
-          'time': new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        'email': email,
+        'to_email': email,
+        'user_email': email,
+        'passcode': otp,
+        'otp_code': otp,
+        'time': new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     };
 
     console.log("Attempting to send OTP to:", email, "via EmailJS...");
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
     });
 
     if (!res.ok) {
-        const err = await res.text();
-        console.error("EmailJS Error Response:", res.status, err);
-        throw new Error(`Email Service rejected request: ${err}`);
+      const err = await res.text();
+      console.error("EmailJS Error Response:", res.status, err);
+      throw new Error(`Email Service rejected request: ${err}`);
     }
-    
+
     console.log("EmailJS Success: OTP sent successfully.");
-    
+
     return true;
   } catch (err) {
     console.error("EmailJS Catch Error:", err);
@@ -505,20 +505,20 @@ export async function getStaffList(shipType?: string): Promise<Staff[]> {
 }
 
 function dbToStaff(s: StaffRow): Staff {
-  return { 
-    id: s.id, 
-    name: s.name, 
-    email: s.email, 
-    password: s.password || "", 
-    role: (s.role as StaffRole) || "scanner", 
-    createdAt: s.created_at || "", 
-    shipType: s.ship_type || undefined, 
+  return {
+    id: s.id,
+    name: s.name,
+    email: s.email,
+    password: s.password || "",
+    role: (s.role as StaffRole) || "scanner",
+    createdAt: s.created_at || "",
+    shipType: s.ship_type || undefined,
     shipIds: s.ship_id ? s.ship_id.split(",").map((id: string) => id.trim()).filter(Boolean) : []
   };
 }
 
 export async function addStaff(
-  name: string, email: string, password: string, 
+  name: string, email: string, password: string,
   shipType: string = "ferry", shipIds?: string[], role: StaffRole = "scanner"
 ): Promise<void> {
   // Prefer the RPC (hashes the password server-side).
@@ -768,7 +768,7 @@ export async function generateSeatsForShip(
 export async function addShip(ship: {
   name: string; type: "ferry" | "pumpboat" | "fastcraft" | "roro"; route: string;
   departure: string; arrival: string; price: number;
-  totalSeats: number; totalBunks?: number; scheduleDays: string; 
+  totalSeats: number; totalBunks?: number; scheduleDays: string;
   imageUrl?: string; stops?: string | unknown[]; isConfirmed?: boolean;
   requesterId?: string; requesterName?: string;
 }): Promise<string> {
@@ -788,14 +788,14 @@ export async function addShip(ship: {
 
   try {
     const { data, error } = await supabase.from("ships").insert(insertData).select("id").single();
-    
+
     if (error) {
       console.error("Detailed Database Error:", error);
       throw new Error(`Database Error: ${error.message || 'Unknown error'}`);
     }
 
     if (!data) throw new Error("Connection successful but no ship ID was returned.");
-    
+
     // Auto-generate seat rows
     await generateSeatsForShip(data.id, ship.totalSeats, ship.totalBunks || 0);
     return data.id;
@@ -811,7 +811,7 @@ export async function addShip(ship: {
 export async function deleteShip(id: string): Promise<void> {
   // Manual cascade delete
   console.log("Robustly deleting ship dependencies for ID:", id);
-  
+
   // 1. Get all bookings for this ship
   const { data: shipBookings } = await supabase.from("bookings").select("id").eq("ship_id", id);
   const bookingIds = shipBookings?.map(b => b.id) || [];
@@ -823,7 +823,7 @@ export async function deleteShip(id: string): Promise<void> {
     if (scErr) console.error("Scan records deletion error:", scErr);
     else console.log("Deleted scan records for ship bookings.");
   }
-  
+
   // 3. Delete seats
   const { error: seatErr } = await supabase.from("seats").delete().eq("ship_id", id);
   if (seatErr) console.error("Seats deletion error:", seatErr);
@@ -890,7 +890,7 @@ export async function getShips(onlyConfirmed: boolean = false): Promise<Ship[]> 
   const baseQuery = () => supabase.from("ships").select("*").order("name", { ascending: true });
   const { data, error } = onlyConfirmed ? await baseQuery().eq("is_confirmed", true) : await baseQuery();
   if (error) throw error;
-  
+
   // Filter out any "soft-deleted" or hidden ships
   return (data || [])
     .filter((row: ShipRow) => !(row.name || "").startsWith("[DEL]"))
@@ -900,7 +900,7 @@ export async function getShips(onlyConfirmed: boolean = false): Promise<Ship[]> 
 export async function confirmShip(id: string): Promise<void> {
   // 1. Get the ship to find the requester
   const { data: shipData } = await supabase.from("ships").select("id, requester_id").eq("id", id).single();
-  
+
   // 2. Update the ship status
   const { error } = await supabase.from("ships").update({ is_confirmed: true }).eq("id", id);
   if (error) throw error;
@@ -917,7 +917,7 @@ export async function confirmShip(id: string): Promise<void> {
       }
     }
   }
-  
+
   const { data: ship } = await supabase.from("ships").select("name").eq("id", id).single();
   await addSystemLog("CONFIRM_SHIP", `Confirmed vessel: ${ship?.name || id}`, "System/SuperAdmin");
 }
@@ -933,7 +933,7 @@ function dbToShip(row: ShipRow): Ship {
     id: row.id ?? "", name: row.name ?? "", type: row.type ?? "ferry", route: row.route ?? "",
     departure: row.departure ?? "", arrival: row.arrival ?? "", date: row.date ?? "",
     price: row.price ?? 0, totalSeats: row.total_seats ?? 0, image: row.image_url || row.image || "",
-    scheduleDays: row.schedule_days ?? undefined, isActive: row.is_active ?? undefined, 
+    scheduleDays: row.schedule_days ?? undefined, isActive: row.is_active ?? undefined,
     isConfirmed: row.is_confirmed ?? undefined,
     stops: row.stops ?? undefined, totalBunks: row.total_bunks ?? undefined,
     cancelled_dates: row.cancelled_dates ?? [],
@@ -999,16 +999,16 @@ export function isLegOperating(ship: Ship, boardStop: string, alightStop: string
 
 export function getShipStops(ship: Ship): Stop[] {
   if (ship.stops) {
-    try { 
+    try {
       const parsed = JSON.parse(ship.stops);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch { /* fallback */ }
   }
-  
+
   // Fallback: use route string (supports →, -, /)
   const separator = ship.route.includes("→") ? "→" : ship.route.includes("-") ? "-" : "/";
   const parts = ship.route.split(separator).map(s => s.trim()).filter(Boolean);
-  
+
   if (parts.length >= 2) {
     return parts.map((loc, idx) => ({
       location: loc,
@@ -1020,7 +1020,7 @@ export function getShipStops(ship: Ship): Stop[] {
     // Single stop fallback
     return [{ location: parts[0], arrival: "-", departure: ship.departure, price: 0 }];
   }
-  
+
   return [];
 }
 
@@ -1189,7 +1189,7 @@ export async function getSeatsForShipAndDate(
 
   // Build set of taken seat IDs for this leg
   const takenSeatIds = new Set<string>();
-  
+
   if (bookingData && bookingData.length > 0) {
     // To check overlaps correctly, we need the stop order for this ship
     const { data: shipData } = await supabase.from("ships").select("stops, route").eq("id", shipId).single();
@@ -1379,7 +1379,7 @@ export async function saveBooking(booking: Booking): Promise<void> {
     id_verified_by: booking.idVerifiedBy || null,
     id_rejected_reason: booking.idRejectedReason || null,
   });
-  
+
   if (error) {
     console.error("[saveBooking] Error:", error);
     throw error;
@@ -1461,7 +1461,7 @@ export async function uploadIDImage(bookingId: string, fileBlob: Blob): Promise<
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from("id-verifications")
-    .upload(fileName, fileBlob, { 
+    .upload(fileName, fileBlob, {
       contentType: fileBlob.type,
       cacheControl: "3600",
       upsert: false
@@ -1481,7 +1481,7 @@ export async function uploadIDImage(bookingId: string, fileBlob: Blob): Promise<
 }
 
 export async function updateIDVerificationStatus(
-  bookingId: string, 
+  bookingId: string,
   status: "verified" | "rejected",
   isVerified: boolean,
   reason?: string,
@@ -1491,7 +1491,7 @@ export async function updateIDVerificationStatus(
     id_verification_status: string; is_id_verified: boolean;
     id_verified_at: string | null; id_verified_by: string | null;
     id_rejected_reason: string | null; passenger_type?: string;
-  } = { 
+  } = {
     id_verification_status: status,
     is_id_verified: isVerified,
     id_verified_at: status === "verified" ? new Date().toISOString() : null,
@@ -1507,7 +1507,7 @@ export async function updateIDVerificationStatus(
   const { error } = await supabase.from("bookings")
     .update(updates)
     .eq("id", bookingId);
-  
+
   if (error) throw error;
 
   // Trigger EmailJS Notification (Async)
@@ -1544,7 +1544,7 @@ export async function updateIDVerificationStatus(
 
 export async function updateBookingToRegular(bookingId: string, fullPrice: number): Promise<void> {
   const { error } = await supabase.from("bookings")
-    .update({ 
+    .update({
       passenger_type: "regular",
       leg_price: fullPrice,
       id_verification_status: "none",
@@ -1552,7 +1552,7 @@ export async function updateBookingToRegular(bookingId: string, fullPrice: numbe
       id_rejected_reason: null
     })
     .eq("id", bookingId);
-  
+
   if (error) throw error;
 }
 
@@ -1650,15 +1650,15 @@ export function getTodayDate(): string {
  */
 export function isStopDeparted(stop: Stop, tripDate: string): boolean {
   if (!stop || !stop.departure) return false;
-  
+
   const now = new Date();
   const todayStr = getLocalDate();
-  
+
   // If the trip is in the future, it definitely hasn't departed
   if (tripDate > todayStr) return false;
   // If the trip was in the past, it's already departed
   if (tripDate < todayStr) return true;
-  
+
   // Same day: parse the departure time (e.g., "08:00 AM" or "08:00 am")
   try {
     const [time, periodRaw] = stop.departure.trim().split(/\s+/);
@@ -1667,10 +1667,10 @@ export function isStopDeparted(stop: Stop, tripDate: string): boolean {
     let h = hours;
     if (period === "PM" && h !== 12) h += 12;
     if (period === "AM" && h === 12) h = 0;
-    
+
     const departureDate = new Date(`${tripDate}T00:00:00`);
     departureDate.setHours(h, minutes, 0, 0);
-    
+
     // Add small buffer if needed (e.g., 5 mins)
     return now >= departureDate;
   } catch (e) {
@@ -1699,7 +1699,7 @@ Please contact Port Support to arrange a re-booking or to request a full refund 
 
 export async function cancelShipDate(shipId: string, date: string, reason: string) {
   const { data: shipData } = await supabase.from("ships").select("cancelled_dates").eq("id", shipId).single();
-  
+
   const currentCancelled: string[] = shipData?.cancelled_dates || [];
   if (!currentCancelled.includes(date)) {
     const { error } = await supabase.from("ships").update({ cancelled_dates: [...currentCancelled, date] }).eq("id", shipId);
@@ -1787,16 +1787,16 @@ export async function getReviewsByShip(shipId: string): Promise<Review[]> {
     console.error("Join fetch for reviews failed, using manual filter:", err);
     // Manual fallback: Get all reviews and correlate (less efficient but safe)
     const all = await getReviews();
-    
+
     // Get all bookings for this ship to filter reviews
     const { data: shipBookings } = await supabase
       .from("bookings")
       .select("id")
       .eq("ship_id", shipId);
-    
+
     if (!shipBookings) return [];
     const shipBookingIds = new Set(shipBookings.map(b => b.id));
-    
+
     return all.filter(r => r.bookingId && shipBookingIds.has(r.bookingId));
   }
 }
@@ -1812,6 +1812,11 @@ export async function hasReviewForBooking(bookingId: string): Promise<boolean> {
     console.error("Error checking review status:", error);
     return false;
   }
-  
+
   return !!data;
+}
+
+export async function deleteReview(id: string): Promise<void> {
+  const { error } = await supabase.from("reviews").delete().eq("id", id);
+  if (error) throw error;
 }
