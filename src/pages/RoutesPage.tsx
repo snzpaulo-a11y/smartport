@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Route, MapPin, Anchor, Loader2 } from "lucide-react";
+import { Route, MapPin, Anchor } from "lucide-react";
 import { getCurrentUser, getShips, Ship, getShipStops } from "@/lib/store";
 import PassengerHeader from "@/components/PassengerHeader";
 import BottomNav from "@/components/BottomNav";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const RoutesPage = () => {
   const navigate = useNavigate();
@@ -60,8 +61,8 @@ const RoutesPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {loading ? (
-              <div className="col-span-full py-20 text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-[#E3000F] mx-auto opacity-50" />
+              <div className="col-span-full">
+                <PageSkeleton variant="grid" count={6} inline />
               </div>
             ) : routes.length > 0 ? (
               routes.map((route, idx) => (

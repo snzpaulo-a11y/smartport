@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getShipById, getShipStops, calcLegPrice, Stop, Ship, isStopDeparted, getLocalDate, getNextLocalDate, isDayOnSchedule, isOperatingToday, isLegOperating, getLegScheduleDays, getScheduleDays } from "@/lib/store";
-import { ArrowLeft, MapPin, ChevronRight, ChevronLeft, Loader2, Calendar, Clock, ChevronDown, Check, Anchor, X } from "lucide-react";
+import { ArrowLeft, MapPin, ChevronRight, ChevronLeft, Calendar, Clock, ChevronDown, Check, Anchor, X } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -163,8 +164,8 @@ const LegSelector = () => {
   })();
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+    <div className="max-w-md mx-auto">
+      <PageSkeleton variant="list" count={4} />
     </div>
   );
 

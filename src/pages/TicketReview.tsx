@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getShips, Ship, saveBooking, generateId, getLocalDate, getCurrentUser } from "@/lib/store";
-import { ArrowLeft, Loader2, AlertTriangle, QrCode, CircleUserRound, Home, Ship as ShipIcon, Calendar, User, ArrowRight, Route, Clock, Armchair, Tag } from "lucide-react";
+import { ArrowLeft, AlertTriangle, QrCode, CircleUserRound, Home, Ship as ShipIcon, Calendar, User, ArrowRight, Route, Clock, Armchair, Tag } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const TicketReview = () => {
   const { shipId, seatId } = useParams<{ shipId: string; seatId: string }>();
@@ -80,7 +81,13 @@ const TicketReview = () => {
     });
   }, [shipId]);
 
-  if (loading) return <div className="min-h-screen bg-[#0A1118] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#E3000F]" /></div>;
+  if (loading) return (
+    <div className="min-h-screen bg-[#0A1118]">
+      <div className="max-w-md mx-auto">
+        <PageSkeleton variant="details" />
+      </div>
+    </div>
+  );
   if (!ship || !name) return <div className="min-h-screen bg-[#0A1118] p-8 text-center text-white">Invalid booking data</div>;
 
   // Use the passed bookingId or a mock for display if missing

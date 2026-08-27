@@ -3,29 +3,13 @@ import { motion } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
 import { getBookingById, getShipById, Booking, Ship, submitReview, hasReviewForBooking, supabase, dbToBooking, getCounterDeadline } from "@/lib/store";
 import FeedbackModal from "@/components/FeedbackModal";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 import {
   ArrowLeft, Download, Ship as ShipIcon, Calendar, Clock,
   MapPin, Armchair, User, Loader2, CheckCircle, QrCode, AlertTriangle, ShieldAlert, Wallet
 } from "lucide-react";
 
-// Load html-to-image from CDN once
-type HtmlToImageLib = {
-  toPng: (node: HTMLElement, options?: Record<string, unknown>) => Promise<string>;
-};
-
-function loadHtmlToImage(): Promise<HtmlToImageLib | null> {
-  return new Promise((resolve) => {
-    const w = window as unknown as { htmlToImage?: HtmlToImageLib };
-    if (w.htmlToImage) return resolve(w.htmlToImage);
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
-    script.onload = () => resolve(w.htmlToImage || null);
-    script.onerror = () => resolve(null);
-    document.head.appendChild(script);
-  });
-}
-
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 
 const QRImage = ({ value, size = 160 }: { value: string; size?: number }) => {
   return (
@@ -48,6 +32,184 @@ const STATUS_COLOR: Record<string, string> = {
   expired: "bg-zinc-500/20 text-zinc-400",
 };
 
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawRow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  label: string,
+  value: string,
+  valueColor: string,
+  valueSize: number,
+  fontSize = 13,
+  labelColor = "#94a3b8",
+  valueBold = 700
+) {
+  ctx.fillStyle = labelColor;
+  ctx.font = `700 ${fontSize}px Inter, Arial, sans-serif`;
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x, y);
+  const labelWidth = ctx.measureText(label).width;
+  ctx.fillStyle = valueColor;
+  ctx.font = `${valueBold} ${valueSize}px Inter, Arial, sans-serif`;
+  ctx.fillText(value, x, y + valueSize + 2, w - labelWidth);
+}
+
+const CANVAS_W = 900;
+
+async function drawTicketToCanvas(
+  canvas: HTMLCanvasElement,
+  booking: Booking,
+  ship: Ship | null,
+  qrDataUrl: string,
+  routeDisplay: string,
+  dateDisplay: string
+): Promise<string> {
+  const scale = 3;
+  const W = CANVAS_W;
+  const X = 60;
+  const CX = W / 2;
+
+  // Compute layout height dynamically (depends on whether a price row is shown)
+  const detailsY = 250 + 78 * 3 + (booking.legPrice ? 110 : 0); // after 3 rows + amount box
+  const dividerBottom = detailsY + 90;
+  const afterQr = dividerBottom + 280 + 32 + 24; // qr box + spacing
+  const afterCode = afterQr + 34; // reference code
+  const H = afterCode + 56; // + footer hint + padding
+
+  canvas.width = W * scale;
+  canvas.height = H * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.scale(scale, scale);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  const textColor = "#0f172a";
+  let y = 250;
+
+  // Background
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+
+  // Header band (light, mirrors on-screen gradient header)
+  const grad = ctx.createLinearGradient(0, 0, W, 190);
+  grad.addColorStop(0, "#fdeff0");
+  grad.addColorStop(1, "#f5f6fb");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  roundRect(ctx, 0, 0, W, 190, 40);
+  ctx.fill();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "800 32px 'Plus Jakarta Sans', Inter, Arial, sans-serif";
+  ctx.fillText(ship?.name || "SmartPort Vessel", X, 84);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 15px Inter, Arial, sans-serif";
+  ctx.fillText("Ferry Ticket", X, 114);
+
+  // passenger type badge (red pill)
+  ctx.font = "800 15px Inter, Arial, sans-serif";
+  const type = (booking.passengerType || "regular").toUpperCase();
+  const tw = ctx.measureText(type).width + 32;
+  ctx.beginPath();
+  roundRect(ctx, W - X - tw, 56, tw, 34, 17);
+  ctx.fillStyle = "#e11d48";
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(type, W - X - tw / 2 - ctx.measureText(type).width / 2, 74);
+
+  drawRow(ctx, X, y, (W - 2 * X) / 2, "PASSENGER", booking.passengerName, textColor, 17);
+  drawRow(ctx, CX + X / 2, y, (W - 2 * X) / 2, "SEAT", booking.seatLabel + (booking.accommodationType ? ` · ${booking.accommodationType}` : ""), "#dc2626", 20);
+  y += 78;
+
+  drawRow(ctx, X, y, W - 2 * X, "ROUTE", routeDisplay, textColor, 17);
+  y += 78;
+
+  drawRow(ctx, X, y, (W - 2 * X) / 2, "DATE", dateDisplay, textColor, 16);
+  drawRow(ctx, CX + X / 2, y, (W - 2 * X) / 2, "DEPARTURE", ship?.departure ?? "—", textColor, 16);
+  y += 78;
+
+  if (booking.legPrice) {
+    ctx.fillStyle = "#fef2f2";
+    ctx.beginPath();
+    roundRect(ctx, X, y, W - 2 * X, 76, 14);
+    ctx.fill();
+    ctx.strokeStyle = "#fee2e2";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    drawRow(ctx, X + 24, y + 22, 300, "AMOUNT PAID", `₱${booking.legPrice.toLocaleString()}`, "#dc2626", 24);
+    y += 110;
+  }
+
+  // Dashed divider
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 12]);
+  ctx.beginPath();
+  ctx.moveTo(X, y);
+  ctx.lineTo(W - X, y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // notch circles
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(12, y, 26, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.beginPath();
+  ctx.arc(12, y, 26, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = "#ffffff";
+  ctx.arc(W - 12, y, 26, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.beginPath();
+  ctx.arc(W - 12, y, 26, 0, Math.PI * 2);
+  ctx.stroke();
+  y += 90;
+
+  // QR
+  const qrSize = 280;
+  const qrImg = new Image();
+  await new Promise<void>((resolve, reject) => {
+    qrImg.onload = () => resolve();
+    qrImg.onerror = () => reject(new Error("QR load failed"));
+    qrImg.src = qrDataUrl;
+  });
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 2;
+  roundRect(ctx, CX - qrSize / 2 - 16, y, qrSize + 32, qrSize + 32, 16);
+  ctx.fill();
+  ctx.stroke();
+  ctx.drawImage(qrImg, CX - qrSize / 2, y + 16, qrSize, qrSize);
+  y += qrSize + 32 + 24;
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "800 20px 'Courier New', monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(booking.qrCode, CX, y);
+  ctx.textAlign = "left";
+  y += 34;
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "700 15px Inter, Arial, sans-serif";
+  ctx.fillText("Show this stub at the gate for boarding", CX - ctx.measureText("Show this stub at the gate for boarding").width / 2, y);
+
+  return canvas.toDataURL("image/png");
+}
+
 const TYPE_COLOR: Record<string, string> = {
   regular: "bg-primary/20 text-primary",
   student: "bg-secondary/20 text-secondary",
@@ -58,7 +220,8 @@ const TYPE_COLOR: Record<string, string> = {
 const DigitalTicket = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
-  const ticketRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [ship, setShip] = useState<Ship | null>(null);
   const [loading, setLoading] = useState(true);
@@ -197,38 +360,81 @@ const DigitalTicket = () => {
   };
 
   const handleDownload = useCallback(async () => {
-    if (!ticketRef.current || !activeBooking) return;
+    if (!activeBooking) return;
     setDownloading(true);
+
+    // On mobile, popups must be opened synchronously within the user gesture,
+    // otherwise iOS Safari treats it as blocked. Open it first, then fill it
+    // in once the canvas is ready.
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    let previewWin: Window | null = null;
+    if (isMobile) {
+      previewWin = window.open("", "_blank");
+      if (!previewWin) {
+        setDownloading(false);
+        alert("Please allow popups to download your ticket, or take a screenshot instead.");
+        return;
+      }
+    }
+
     try {
-      // Wait for QR image to load
+      // Give the hidden QRCodeCanvas time to render
       await new Promise(r => setTimeout(r, 300));
 
-      const lib = await loadHtmlToImage();
-      if (!lib) throw new Error("Library failed to load");
+      const canvas = canvasRef.current;
+      const qr = qrCanvasRef.current && qrCanvasRef.current.toDataURL
+        ? qrCanvasRef.current.toDataURL("image/png")
+        : null;
 
-      const dataUrl = await lib.toPng(ticketRef.current, {
-        backgroundColor: "#0f172a",
-        pixelRatio: 3,
-        cacheBust: true,
-        // Fix cross-origin QR image
-        fetchRequestInit: { mode: "cors" },
-      });
+      if (!canvas) throw new Error("Canvas not ready");
+      if (!qr) throw new Error("QR not ready");
 
-      const link = document.createElement("a");
-      link.download = `SmartPort-Ticket-${activeBooking.passengerName}-${activeBooking.seatLabel || activeBooking.qrCode}.png`;
-      link.href = dataUrl;
-      link.click();
+      const route = (activeBooking.boardStop && activeBooking.alightStop)
+        ? `${activeBooking.boardStop} → ${activeBooking.alightStop}`
+        : ship?.route ?? "—";
+
+      const date = activeBooking.tripDate
+        ? new Date(activeBooking.tripDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+        : ship?.date ?? "—";
+
+      const dataUrl = await drawTicketToCanvas(canvas, activeBooking, ship, qr, route, date);
+
+      const filename = `SmartPort-Ticket-${activeBooking.passengerName}-${activeBooking.seatLabel || activeBooking.qrCode}.png`;
+
+      // Programmatic anchor downloads are blocked on mobile browsers (esp. iOS).
+      // Open the image in a new tab so users can long-press/save it instead.
+      if (isMobile) {
+        if (!previewWin) throw new Error("Popup unavailable");
+        previewWin.document.body.style.margin = "0";
+        previewWin.document.title = filename;
+        const img = previewWin.document.createElement("img");
+        img.src = dataUrl;
+        img.style.maxWidth = "100%";
+        img.style.display = "block";
+        img.style.margin = "0 auto";
+        img.style.cursor = "pointer";
+        previewWin.document.body.appendChild(img);
+        const hint = previewWin.document.createElement("p");
+        hint.style.cssText = "font-family: sans-serif; text-align: center; color: #666; padding: 16px;";
+        hint.textContent = "Long-press the image and tap 'Save Image' to save your ticket.";
+        previewWin.document.body.appendChild(hint);
+      } else {
+        const link = document.createElement("a");
+        link.download = filename;
+        link.href = dataUrl;
+        link.click();
+      }
     } catch (e) {
       console.error("Download failed:", e);
       alert("Download failed. Try taking a screenshot instead.");
     } finally {
       setDownloading(false);
     }
-  }, [activeBooking]);
+  }, [activeBooking, ship]);
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen gap-3 text-muted-foreground">
-      <Loader2 className="w-5 h-5 animate-spin" /> Loading ticket...
+    <div className="max-w-md mx-auto">
+      <PageSkeleton variant="details" />
     </div>
   );
 
@@ -303,9 +509,8 @@ const DigitalTicket = () => {
         </motion.div>
       )}
 
-      {/* Ticket card — this is what gets saved as image */}
+      {/* Ticket card (on-screen display) */}
       <motion.div
-        ref={ticketRef}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="glass-card rounded-2xl overflow-hidden"
@@ -545,6 +750,18 @@ const DigitalTicket = () => {
         >
           ← Back to Booking
         </button>
+      </div>
+
+      {/* Hidden QR renderer + canvas used to generate the download image */}
+      <div aria-hidden className="fixed top-0 left-0 z-[-50] w-0 h-0 overflow-hidden">
+        <QRCodeCanvas
+          ref={qrCanvasRef}
+          value={activeBooking.qrCode}
+          size={512}
+          level="H"
+          includeMargin={false}
+        />
+        <canvas ref={canvasRef} />
       </div>
 
       <FeedbackModal 

@@ -5,6 +5,7 @@ import { getShips, Ship, getLocalDate, getShipStops, isStopDeparted, getCurrentU
 import { Ship as ShipIcon, Route, Calendar, Clock, ArrowRight, ChevronRight, Anchor, MapPin } from "lucide-react";
 import PassengerHeader from "@/components/PassengerHeader";
 import BottomNav from "@/components/BottomNav";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const SchedulesPage = () => {
   const navigate = useNavigate();
@@ -44,9 +45,7 @@ const SchedulesPage = () => {
 
           <div className="flex flex-col gap-10">
             {loading ? (
-              <div className="py-20 text-center">
-                <div className="animate-spin w-8 h-8 border-2 border-[#E3000F] border-t-transparent rounded-full mx-auto" />
-              </div>
+              <PageSkeleton variant="nav" count={3} inline />
             ) : ships.length > 0 ? (
               ships.map(ship => (
                 <motion.div 

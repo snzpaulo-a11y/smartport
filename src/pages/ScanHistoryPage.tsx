@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getBookingsByShipAndDate, getLocalDate, Booking } from "@/lib/store";
-import { ArrowLeft, Loader2, Users, CheckCircle, Clock, Search } from "lucide-react";
+import { ArrowLeft, Users, CheckCircle, Clock, Search } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const typeColor: Record<string, string> = {
   regular: "bg-primary/20 text-primary",
@@ -91,9 +92,7 @@ const ScanHistoryPage = () => {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        </div>
+        <PageSkeleton variant="list" count={5} inline />
       ) : bookings.length === 0 ? (
         <div className="text-center py-20 glass-card rounded-2xl">
           <Users className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />

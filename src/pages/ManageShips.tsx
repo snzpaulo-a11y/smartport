@@ -6,6 +6,7 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, X, Save, Loader2, AlertTriangle,
   Ship as ShipIcon, Sailboat, ChevronRight, ChevronDown, Power, ShieldAlert
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -241,7 +242,7 @@ const ManageShips = () => {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+        <PageSkeleton variant="list" count={4} inline />
       ) : (
         <>
           {(allowedType === "all" || allowedType === "ferry") && ferries.length > 0 && (

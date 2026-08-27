@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getBookingById, getShipById, Booking, Ship } from "@/lib/store";
-import { Printer, X, Loader2, User, Armchair, MapPin, Calendar, Clock, CheckCircle } from "lucide-react";
+import { Printer, X, User, Armchair, MapPin, Calendar, Clock, CheckCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const PrintTicket = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -33,8 +34,10 @@ const PrintTicket = () => {
     : ship?.date ?? "—";
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen gap-3 text-muted-foreground">
-      <Loader2 className="w-5 h-5 animate-spin" /> Preparing ticket…
+    <div className="min-h-screen bg-slate-100">
+      <div className="max-w-md mx-auto">
+        <PageSkeleton variant="details" />
+      </div>
     </div>
   );
 

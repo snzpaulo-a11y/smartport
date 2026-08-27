@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, Booking, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser } from "@/lib/store";
-import { ArrowLeft, Loader2, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
+import { ArrowLeft, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 import BiometricScanner from "@/components/BiometricScanner";
 
 // â”€â”€ Seat button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -183,8 +184,10 @@ const SeatSelection = () => {
   }, [step, seats, selectedSeatIds, routeGroups]);
 
   if (loading) return (
-    <div className="min-h-screen bg-[#060B11] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-[#E3000F]" />
+    <div className="min-h-screen bg-[#060B11]">
+      <div className="max-w-lg mx-auto">
+        <PageSkeleton variant="grid" count={8} />
+      </div>
     </div>
   );
 

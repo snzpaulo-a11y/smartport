@@ -49,6 +49,7 @@ import {
   MessageSquare,
   Star as StarIcon
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 type AuthTab = "overview" | "admins" | "ships" | "audit" | "reviews" | "settings";
 
@@ -354,9 +355,7 @@ export default function SuperAdminDashboard() {
         <main className="p-8 max-w-5xl w-full">
 
           {loading ? (
-            <div className="flex items-center justify-center p-20">
-              <div className="w-8 h-8 rounded-full border-2 border-[#3F70FF] border-t-transparent animate-spin" />
-            </div>
+            <PageSkeleton variant="dashboard" count={5} inline />
           ) : (
             <>
               {/* OVERVIEW TAB */}

@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getShipById, Ship } from "@/lib/store";
-import { ArrowLeft, Armchair, BedDouble, Loader2, ChevronRight, MapPin, Calendar } from "lucide-react";
+import { ArrowLeft, Armchair, BedDouble, ChevronRight, MapPin, Calendar } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const AccommodationPage = () => {
   const { shipId } = useParams<{ shipId: string }>();
@@ -33,8 +34,8 @@ const AccommodationPage = () => {
   }, [shipId]);
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+    <div className="max-w-md mx-auto">
+      <PageSkeleton variant="details" />
     </div>
   );
   if (!ship) return <div className="p-8 text-center text-foreground">Ship not found</div>;

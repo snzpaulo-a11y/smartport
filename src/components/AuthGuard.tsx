@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { Staff, StaffRole } from "@/lib/store";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -37,8 +37,8 @@ export const AuthGuard = ({ children, allowedRoles, requireStaff = true }: AuthG
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background">
+        <PageSkeleton variant="dashboard" count={4} />
       </div>
     );
   }

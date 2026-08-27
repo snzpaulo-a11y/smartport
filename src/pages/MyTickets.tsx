@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser, getBookingsByUser, getShipById, Booking, deleteBooking, updateBookingToRegular, expireStalePendingBookings, getPaymentDeadline, getCounterDeadline } from "@/lib/store";
-import { ArrowLeft, Ticket, Loader2, Ship as ShipIcon, Calendar, MapPin, QrCode, CreditCard, Trash2, ShieldAlert, CheckCircle2, Shield, Clock, Wallet, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Ticket, Ship as ShipIcon, Calendar, MapPin, QrCode, CreditCard, Trash2, ShieldAlert, CheckCircle2, Shield, Clock, Wallet, AlertTriangle } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import { PageSkeleton } from "@/components/ui/PageSkeleton";
 
 const STATUS_STYLE: Record<string, string> = {
   paid: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
@@ -81,8 +82,8 @@ const MyTickets = () => {
   }, []);
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+    <div className="max-w-lg mx-auto">
+      <PageSkeleton variant="list" count={4} />
     </div>
   );
 
