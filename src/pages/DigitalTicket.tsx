@@ -377,6 +377,7 @@ const DigitalTicket = () => {
       }
     }
 
+    let blobUrl: string | null = null;
     try {
       // Give the hidden QRCodeCanvas time to render
       await new Promise(r => setTimeout(r, 300));
@@ -397,38 +398,73 @@ const DigitalTicket = () => {
         ? new Date(activeBooking.tripDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
         : ship?.date ?? "—";
 
-      const dataUrl = await drawTicketToCanvas(canvas, activeBooking, ship, qr, route, date);
+      const qrDataUrl = await drawTicketToCanvas(canvas, activeBooking, ship, qr, route, date);
 
       const filename = `SmartPort-Ticket-${activeBooking.passengerName}-${activeBooking.seatLabel || activeBooking.qrCode}.png`;
 
-      // Programmatic anchor downloads are blocked on mobile browsers (esp. iOS).
-      // Open the image in a new tab so users can long-press/save it instead.
+      // Convert the (large) data URL into a Blob URL. Blob URLs are far more
+      // reliable than data URLs when opened / downloaded from mobile browsers.
+      const blob = await (await fetch(qrDataUrl)).blob();
+      blobUrl = URL.createObjectURL(blob);
+
       if (isMobile) {
-        if (!previewWin) throw new Error("Popup unavailable");
-        previewWin.document.body.style.margin = "0";
-        previewWin.document.title = filename;
-        const img = previewWin.document.createElement("img");
-        img.src = dataUrl;
-        img.style.maxWidth = "100%";
-        img.style.display = "block";
-        img.style.margin = "0 auto";
-        img.style.cursor = "pointer";
-        previewWin.document.body.appendChild(img);
-        const hint = previewWin.document.createElement("p");
-        hint.style.cssText = "font-family: sans-serif; text-align: center; color: #666; padding: 16px;";
-        hint.textContent = "Long-press the image and tap 'Save Image' to save your ticket.";
-        previewWin.document.body.appendChild(hint);
+        // Try a native download first — modern mobile browsers (incl. iOS 13+
+        // and Android Chrome) support programmatic downloads from blob URLs.
+        let downloaded = false;
+        try {
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = filename;
+          link.rel = "noopener";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          downloaded = true;
+        } catch (e) {
+          console.error("Native download failed on mobile:", e);
+        }
+
+        // Only fall back to opening the preview tab if an explicit user-facing
+        // popup was actually opened earlier. Safari blocks programmatic
+        // downloads, so for it we always guide the user to save via long-press.
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (!downloaded || isIOS) {
+          if (!previewWin) throw new Error("Popup unavailable");
+          previewWin.document.body.style.margin = "0";
+          previewWin.document.body.style.background = "#0f172a";
+          previewWin.document.title = filename;
+          const img = previewWin.document.createElement("img");
+          img.src = blobUrl;
+          img.style.maxWidth = "100%";
+          img.style.height = "auto";
+          img.style.display = "block";
+          img.style.margin = "0 auto";
+          previewWin.document.body.appendChild(img);
+          const hint = previewWin.document.createElement("p");
+          hint.style.cssText = "font-family: sans-serif; text-align: center; color: #fff; padding: 16px;";
+          hint.textContent = isIOS
+            ? "Tap and hold the image, then choose 'Save Image' to save your ticket."
+            : "If the download didn't start, tap and hold the image and choose 'Save Image'.";
+          previewWin.document.body.appendChild(hint);
+        }
       } else {
         const link = document.createElement("a");
+        link.href = blobUrl;
         link.download = filename;
-        link.href = dataUrl;
+        link.rel = "noopener";
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
       }
     } catch (e) {
       console.error("Download failed:", e);
       alert("Download failed. Try taking a screenshot instead.");
     } finally {
       setDownloading(false);
+      if (blobUrl) {
+        // Clean up after a beat so iOS can still finish reading the blob.
+        setTimeout(() => URL.revokeObjectURL(blobUrl!), 15000);
+      }
     }
   }, [activeBooking, ship]);
 
