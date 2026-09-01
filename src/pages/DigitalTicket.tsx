@@ -75,11 +75,11 @@ async function drawTicketToCanvas(
   routeDisplay: string,
   dateDisplay: string
 ): Promise<string> {
-  // Downscale the export so the saved image matches what the passenger sees on
-  // their phone (~max-w-md). A huge 3x poster-sized image is hard for a scanner
-  // operator to scan off a phone screen. 1.5 keeps the QR crisp (~420px) while
-  // producing a phone-friendly ~1350px-wide image.
-  const scale = 1.5;
+  // Match the phone display: the on-screen ticket card is max-w-md (~448px wide)
+  // and its QR shows at ~180px. 0.6 scale outputs a ~540px-wide image with a
+  // ~168px QR — essentially the same appearance as on the phone so the saved
+  // ticket scans identically to what the passenger sees.
+  const scale = 0.6;
   const W = CANVAS_W;
   const X = 60;
   const CX = W / 2;
