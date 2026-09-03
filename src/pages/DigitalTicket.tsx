@@ -68,13 +68,15 @@ function drawRow(
 const CANVAS_W = 1081;
 const CANVAS_H = 1789;
 
-// The ticket layout is authored against a 618 x 1024 design space. We scale the
-// entire drawing so the exported PNG is the reference size (1081 x 1789) while
-// keeping the exact same proportions/layout.
-const DESIGN_W = 618;
-const DESIGN_H = 1024;
-const SCALE_X = CANVAS_W / DESIGN_W;
-const SCALE_Y = CANVAS_H / DESIGN_H;
+// The ticket is drawn directly at the device-pixel-native export resolution
+// (1081 x 1789) with NO ctx.scale(). Rendering at a fractional upscale (the old
+// 618x1024 design scaled ~1.75x) softens the text and looks blurry. By authoring
+// every coordinate and font size at the final pixel size, each glyph is
+// rasterized once at its true resolution and stays crisp.
+const W = 1081;
+const H = 1789;
+const X = 63;
+const CX = 540;
 
 async function drawTicketToCanvas(
   canvas: HTMLCanvasElement,
@@ -84,82 +86,77 @@ async function drawTicketToCanvas(
   routeDisplay: string,
   dateDisplay: string
 ): Promise<string> {
-  const W = DESIGN_W;
-  const H = DESIGN_H;
-  const X = 36;
-  const CX = W / 2;
-
-  canvas.width = CANVAS_W;
-  canvas.height = CANVAS_H;
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context unavailable");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Scale the 618x1024 design to fill the target 1081x1789 canvas.
-  ctx.scale(SCALE_X, SCALE_Y);
+  // Make sure canvas custom fonts are loaded before first draw.
+  try { await document.fonts?.ready; } catch { /* ignore */ }
 
   const textColor = "#0f172a";
-  let y = 175;
+  let y = 306;
 
   // Background
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, W, H);
 
   // Header band
-  const grad = ctx.createLinearGradient(0, 0, W, 150);
+  const grad = ctx.createLinearGradient(0, 0, W, 262);
   grad.addColorStop(0, "#fdeff0");
   grad.addColorStop(1, "#f5f6fb");
   ctx.fillStyle = grad;
   ctx.beginPath();
-  roundRect(ctx, 0, 0, W, 150, 30);
+  roundRect(ctx, 0, 0, W, 262, 52);
   ctx.fill();
 
   ctx.fillStyle = "#0f172a";
-  ctx.font = "800 24px 'Plus Jakarta Sans', Inter, Arial, sans-serif";
-  ctx.fillText(ship?.name || "SmartPort Vessel", X, 68);
+  ctx.font = "800 42px 'Plus Jakarta Sans', Inter, Arial, sans-serif";
+  ctx.fillText(ship?.name || "SmartPort Vessel", X, 119);
   ctx.fillStyle = "#64748b";
-  ctx.font = "600 12px Inter, Arial, sans-serif";
-  ctx.fillText("Ferry Ticket", X, 94);
+  ctx.font = "600 21px Inter, Arial, sans-serif";
+  ctx.fillText("Ferry Ticket", X, 164);
 
   // Passenger type badge
-  ctx.font = "800 12px Inter, Arial, sans-serif";
+  ctx.font = "800 21px Inter, Arial, sans-serif";
   const type = (booking.passengerType || "regular").toUpperCase();
-  const tw = ctx.measureText(type).width + 24;
+  const tw = ctx.measureText(type).width + 42;
   ctx.beginPath();
-  roundRect(ctx, W - X - tw, 50, tw, 28, 14);
+  roundRect(ctx, W - X - tw, 87, tw, 49, 25);
   ctx.fillStyle = "#e11d48";
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(type, W - X - tw / 2 - ctx.measureText(type).width / 2, 66);
+  ctx.fillText(type, W - X - tw / 2 - ctx.measureText(type).width / 2, 115);
 
-  drawRow(ctx, X, y, (W - 2 * X) / 2, "PASSENGER", booking.passengerName, textColor, 14, 11);
-  drawRow(ctx, CX + X / 2, y, (W - 2 * X) / 2, "SEAT", booking.seatLabel + (booking.accommodationType ? ` · ${booking.accommodationType}` : ""), "#dc2626", 16, 11);
-  y += 60;
+  drawRow(ctx, X, y, (W - 2 * X) / 2, "PASSENGER", booking.passengerName, textColor, 25, 19);
+  drawRow(ctx, CX + X / 2, y, (W - 2 * X) / 2, "SEAT", booking.seatLabel + (booking.accommodationType ? ` · ${booking.accommodationType}` : ""), "#dc2626", 28, 19);
+  y += 105;
 
-  drawRow(ctx, X, y, W - 2 * X, "ROUTE", routeDisplay, textColor, 14, 11);
-  y += 60;
+  drawRow(ctx, X, y, W - 2 * X, "ROUTE", routeDisplay, textColor, 25, 19);
+  y += 105;
 
-  drawRow(ctx, X, y, (W - 2 * X) / 2, "DATE", dateDisplay, textColor, 13, 11);
-  drawRow(ctx, CX + X / 2, y, (W - 2 * X) / 2, "DEPARTURE", ship?.departure ?? "—", textColor, 13, 11);
-  y += 60;
+  drawRow(ctx, X, y, (W - 2 * X) / 2, "DATE", dateDisplay, textColor, 23, 19);
+  drawRow(ctx, CX + X / 2, y, (W - 2 * X) / 2, "DEPARTURE", ship?.departure ?? "—", textColor, 23, 19);
+  y += 105;
 
   if (booking.legPrice) {
     ctx.fillStyle = "#fef2f2";
     ctx.beginPath();
-    roundRect(ctx, X, y, W - 2 * X, 60, 12);
+    roundRect(ctx, X, y, W - 2 * X, 105, 21);
     ctx.fill();
     ctx.strokeStyle = "#fee2e2";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2.6;
     ctx.stroke();
-    drawRow(ctx, X + 18, y + 16, 240, "AMOUNT PAID", `₱${booking.legPrice.toLocaleString()}`, "#dc2626", 18, 11);
-    y += 80;
+    drawRow(ctx, X + 31, y + 28, 420, "AMOUNT PAID", `₱${booking.legPrice.toLocaleString()}`, "#dc2626", 32, 19);
+    y += 140;
   }
 
   // Dashed divider
   ctx.strokeStyle = "#e2e8f0";
-  ctx.lineWidth = 2.5;
-  ctx.setLineDash([8, 10]);
+  ctx.lineWidth = 4.4;
+  ctx.setLineDash([14, 17]);
   ctx.beginPath();
   ctx.moveTo(X, y);
   ctx.lineTo(W - X, y);
@@ -168,24 +165,24 @@ async function drawTicketToCanvas(
   // Notch circles
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.arc(10, y, 22, 0, Math.PI * 2);
+  ctx.arc(17, y, 38, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#e2e8f0";
   ctx.beginPath();
-  ctx.arc(10, y, 22, 0, Math.PI * 2);
+  ctx.arc(17, y, 38, 0, Math.PI * 2);
   ctx.stroke();
   ctx.beginPath();
   ctx.fillStyle = "#ffffff";
-  ctx.arc(W - 10, y, 22, 0, Math.PI * 2);
+  ctx.arc(W - 17, y, 38, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#e2e8f0";
   ctx.beginPath();
-  ctx.arc(W - 10, y, 22, 0, Math.PI * 2);
+  ctx.arc(W - 17, y, 38, 0, Math.PI * 2);
   ctx.stroke();
-  y += 40;
+  y += 70;
 
   // QR
-  const qrSize = 240;
+  const qrSize = 420;
   const qrImg = new Image();
   await new Promise<void>((resolve, reject) => {
     qrImg.onload = () => resolve();
@@ -194,21 +191,21 @@ async function drawTicketToCanvas(
   });
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#e2e8f0";
-  ctx.lineWidth = 2;
-  roundRect(ctx, CX - qrSize / 2 - 12, y, qrSize + 24, qrSize + 24, 14);
+  ctx.lineWidth = 3.5;
+  roundRect(ctx, CX - qrSize / 2 - 21, y, qrSize + 42, qrSize + 42, 25);
   ctx.fill();
   ctx.stroke();
-  ctx.drawImage(qrImg, CX - qrSize / 2, y + 12, qrSize, qrSize);
-  y += qrSize + 24 + 18;
+  ctx.drawImage(qrImg, CX - qrSize / 2, y + 21, qrSize, qrSize);
+  y += qrSize + 42 + 31;
 
   ctx.fillStyle = "#0f172a";
-  ctx.font = "800 16px 'Courier New', monospace";
+  ctx.font = "800 28px 'Courier New', monospace";
   ctx.textAlign = "center";
   ctx.fillText(booking.qrCode, CX, y);
   ctx.textAlign = "left";
-  y += 26;
+  y += 45;
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "700 11px Inter, Arial, sans-serif";
+  ctx.font = "700 19px Inter, Arial, sans-serif";
   ctx.fillText("Show this stub at the gate for boarding", CX - ctx.measureText("Show this stub at the gate for boarding").width / 2, y);
 
   return canvas.toDataURL("image/png");
