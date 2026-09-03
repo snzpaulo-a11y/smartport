@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser, getBookingsByUser, getShipById, Booking, deleteBooking, updateBookingToRegular, expireStalePendingBookings, getPaymentDeadline, getCounterDeadline } from "@/lib/store";
@@ -42,44 +42,76 @@ const MyTickets = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
 
+  const refresh = useCallback(async (showLoad = false) => {
+    try {
+      const u = await getCurrentUser();
+      setUser(u);
+      if (!u) return;
+
+      await expireStalePendingBookings();
+      const bookings = await getBookingsByUser(u.id);
+
+      const enriched = await Promise.all(
+        bookings.map(async (b) => {
+          try {
+            const ship = await getShipById(b.shipId);
+            return { ...b, shipName: ship?.name, shipRoute: ship?.route };
+          } catch (e) {
+            console.warn("[MyTickets] Ship enrichment failed for:", b.shipId);
+            return b;
+          }
+        })
+      );
+      setTickets(enriched);
+    } catch (err) {
+      console.error("[MyTickets] Load failed:", err);
+      if (showLoad) alert("Failed to load tickets: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      if (showLoad) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
-      try {
-        setLoading(true);
-        const u = await getCurrentUser();
-        setUser(u);
-        if (!u) {
-          setLoading(false);
-          navigate("/");
-          return;
-        }
-
-        console.log("[MyTickets] Loading for user:", u.id);
-        await expireStalePendingBookings();
-        const bookings = await getBookingsByUser(u.id);
-        console.log("[MyTickets] Found bookings:", bookings.length);
-
-        const enriched = await Promise.all(
-          bookings.map(async (b) => {
-            try {
-              const ship = await getShipById(b.shipId);
-              return { ...b, shipName: ship?.name, shipRoute: ship?.route };
-            } catch (e) {
-              console.warn("[MyTickets] Ship enrichment failed for:", b.shipId);
-              return b;
-            }
-          })
-        );
-        setTickets(enriched);
-      } catch (err) {
-        console.error("[MyTickets] Load failed:", err);
-        alert("Failed to load tickets: " + (err instanceof Error ? err.message : "Unknown error"));
-      } finally {
+      if (cancelled) return;
+      setLoading(true);
+      const u = await getCurrentUser();
+      if (cancelled) return;
+      setUser(u);
+      if (!u) {
         setLoading(false);
+        navigate("/");
+        return;
       }
+      await refresh(true);
     };
     load();
-  }, []);
+
+    return () => { cancelled = true; };
+  }, [navigate, refresh]);
+
+  // Auto-refresh so admin ID approval/rejection is picked up WITHOUT the
+  // passenger having to leave and re-enter the page — same behavior as the
+  // live QR activation on the ticket page. Polling stops once nothing is left
+  // waiting on ID verification.
+  useEffect(() => {
+    if (!user) return;
+
+    const hasPendingVerification = () =>
+      tickets.some(t => t.passengerType?.toLowerCase() !== "regular" && t.idVerificationStatus !== "verified" && t.idVerificationStatus !== "rejected");
+
+    if (!hasPendingVerification()) return;
+
+    const interval = setInterval(() => { refresh(false); }, 5000);
+    const onFocus = () => { refresh(false); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [user, tickets, refresh]);
 
   if (loading) return (
     <div className="max-w-lg mx-auto">
