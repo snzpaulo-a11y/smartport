@@ -1,4 +1,6 @@
+import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { Home, Ticket, Calendar, MessageSquare } from "lucide-react";
 
 const BottomNav = () => {
@@ -13,34 +15,51 @@ const BottomNav = () => {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 w-full z-[100] sm:hidden pb-safe px-3">
-      <div className="max-w-md mx-auto bg-white/55 backdrop-blur-2xl border border-white/60 shadow-[0_-4px_24px_rgba(0,0,0,0.18),0_8px_32px_rgba(0,0,0,0.10)] rounded-[26px] px-2 py-2">
+    <div className="fixed inset-x-0 bottom-0 z-[100] px-4 pb-safe sm:hidden">
+      <nav className="mx-auto max-w-md rounded-[28px] border border-black/[0.06] bg-white/85 px-3 py-2 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.16),0_8px_28px_-12px_rgba(0,0,0,0.10)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
-            
+
             return (
               <button
                 key={item.name}
                 onClick={() => navigate(item.path)}
-                className="flex-1 flex flex-col items-center justify-center gap-1 min-h-12 group relative"
+                aria-current={isActive ? "page" : undefined}
+                className="flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 py-1"
               >
-                <div className={`relative flex items-center justify-center w-11 h-8 rounded-2xl transition-all duration-300 ${
-                  isActive ? "bg-[#E3000F]/10 text-[#E3000F]" : "text-slate-300 group-hover:text-[#E3000F]"
-                }`}>
-                  <Icon className={`w-[22px] h-[22px] ${isActive ? "fill-[#E3000F]/15" : ""}`} strokeWidth={isActive ? 2.4 : 2} />
-                </div>
-                <span className={`text-[10px] font-bold tracking-[0.06em] uppercase transition-colors ${
-                  isActive ? "text-[#E3000F]" : "text-slate-300"
-                }`}>
+                <span
+                  className={cn(
+                    "relative flex h-7 w-12 items-center justify-center rounded-2xl transition-colors duration-200",
+                    isActive ? "text-white" : "text-slate-400",
+                  )}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="bottom-nav-active"
+                      className="absolute inset-0 rounded-2xl bg-primary shadow-[0_4px_14px_rgba(227,0,15,0.35)]"
+                      transition={{ type: "spring", stiffness: 480, damping: 36 }}
+                    />
+                  )}
+                  <Icon
+                    className={cn("relative", isActive ? "h-[18px] w-[18px]" : "h-[20px] w-[20px]")}
+                    strokeWidth={isActive ? 2.4 : 2}
+                  />
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] font-bold uppercase tracking-wide transition-colors",
+                    isActive ? "text-primary" : "text-slate-400",
+                  )}
+                >
                   {item.name}
                 </span>
               </button>
             );
           })}
         </div>
-      </div>
+      </nav>
     </div>
   );
 };

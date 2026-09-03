@@ -589,9 +589,15 @@ const MyTickets = () => {
                       </div>
 
                       <div className="bg-muted/30 rounded-xl p-3 mb-4 text-xs text-center border border-muted-foreground/10">
-                        <p className="text-zinc-400 font-semibold">
-                          Payment was not completed in time — your seat was released and the booking expired.
-                        </p>
+                        {ticket.idVerificationStatus === 'rejected' ? (
+                          <p className="text-zinc-400 font-semibold">
+                            ID verification was not completed in time — your seat was released and the booking expired.
+                          </p>
+                        ) : (
+                          <p className="text-zinc-400 font-semibold">
+                            Payment was not completed in time — your seat was released and the booking expired.
+                          </p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">

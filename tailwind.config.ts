@@ -66,6 +66,10 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      transitionTimingFunction: {
+        spring: "cubic-bezier(0.23, 1, 0.32, 1)",
+        "out-back": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      },
       keyframes: {
         "accordion-down": { from: { height: "0" }, to: { height: "var(--radix-accordion-content-height)" } },
         "accordion-up": { from: { height: "var(--radix-accordion-content-height)" }, to: { height: "0" } },

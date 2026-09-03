@@ -1048,6 +1048,32 @@ export async function getSeatsForShip(shipId: string): Promise<Seat[]> {
  */
 export const PAYMENT_WINDOW_HOURS = 3;
 
+/** Fallback window (hours) if a pending verification's departure can't be resolved. */
+export const ID_VERIFICATION_WINDOW_HOURS = 24;
+
+/**
+ * Deadline for a pending ID verification. A pending discount verification
+ * auto-expires as soon as the ship's scheduled departure for that trip date
+ * passes (or immediately if the trip is already today and time is up).
+ * Falls back to ID_VERIFICATION_WINDOW_HOURS from creation when the
+ * departure time can't be resolved.
+ */
+export function getIdVerificationDeadline(
+  createdAt: string | undefined,
+  departureTime?: string | null,
+  tripDate?: string | null
+): Date {
+  if (departureTime && tripDate) {
+    const departure = parseDepartureTime(departureTime, tripDate);
+    if (departure && !isNaN(departure.getTime())) {
+      return departure;
+    }
+  }
+  const d = new Date(createdAt || new Date().toISOString());
+  if (isNaN(d.getTime())) return new Date(Date.now() + ID_VERIFICATION_WINDOW_HOURS * 60 * 60 * 1000);
+  return new Date(d.getTime() + ID_VERIFICATION_WINDOW_HOURS * 60 * 60 * 1000);
+}
+
 export function getPaymentDeadline(booking: { createdAt?: string; idVerifiedAt?: string }): Date {
   const base = booking.idVerifiedAt || booking.createdAt || new Date().toISOString();
   const d = new Date(base);
@@ -1123,32 +1149,76 @@ export async function expireStalePendingBookings(): Promise<number> {
   try {
     const { data, error } = await supabase
       .from("bookings")
-      .select("id, status, created_at, id_verified_at, counter_deadline, id_verification_status")
+      .select("id, status, created_at, id_verified_at, counter_deadline, id_verification_status, trip_date, ship_id")
       .in("status", ["pending", "counter"]);
     if (error) throw error;
+
+    // Cache departure times by ship to avoid N+1 lookups.
+    const departureCache = new Map<string, string>();
+    const shipIdsWithPending = Array.from(new Set(
+      (data || [])
+        .filter((b: { id_verification_status?: string | null; ship_id?: string | null }) =>
+          b.id_verification_status === "pending" && b.ship_id)
+        .map((b: { ship_id?: string | null }) => b.ship_id as string)
+    ));
+    await Promise.all(shipIdsWithPending.map(async (sid) => {
+      const ship = await getShipById(sid);
+      departureCache.set(sid, ship?.departure || "");
+    }));
 
     const staleIds = (data || [])
       .filter((b: Pick<BookingRow, "id" | "status" | "created_at"> & {
         id_verified_at?: string | null; counter_deadline?: string | null;
         id_verification_status?: string | null;
+        trip_date?: string | null; ship_id?: string | null;
       }) => {
         if (b.status === "counter") {
           return getCounterDeadline({ counterDeadline: b.counter_deadline ?? undefined, createdAt: b.created_at }).getTime() <= Date.now();
         }
-        // Discount bookings awaiting ID verification aren't payable yet — their
-        // payment window starts when the admin approves (id_verified_at).
-        if (b.id_verification_status === "pending") return false;
+        // Discount bookings awaiting ID verification — auto-expire once the
+        // ship departs on the booking's trip date (frees the seat & removes
+        // it from the admin's pending list).
+        if (b.id_verification_status === "pending") {
+          return getIdVerificationDeadline(
+            b.created_at,
+            b.ship_id ? departureCache.get(b.ship_id) : undefined,
+            b.trip_date
+          ).getTime() <= Date.now();
+        }
         return getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at ?? undefined }).getTime() <= Date.now();
-      })
+      });
+
+    const expiredIds = staleIds.map((b: { id: string }) => b.id);
+
+    if (expiredIds.length === 0) return 0;
+
+    // First, downgrade any expired pending verifications to regular fare
+    // before marking as expired (so the passenger_type is corrected).
+    const pendingVerIds = staleIds
+      .filter((b: { id_verification_status?: string | null }) => b.id_verification_status === "pending")
       .map((b: { id: string }) => b.id);
 
-    if (staleIds.length === 0) return 0;
+    if (pendingVerIds.length > 0) {
+      const { error: verErr } = await supabase
+        .from("bookings")
+        .update({
+          status: "expired",
+          passenger_type: "regular",
+          id_verification_status: "rejected",
+          id_rejected_reason: "Verification window expired (trip departed)"
+        })
+        .in("id", pendingVerIds);
+      if (verErr) throw verErr;
+    }
 
-    const { error: upErr } = await supabase
-      .from("bookings")
-      .update({ status: "expired" })
-      .in("id", staleIds);
-    if (upErr) throw upErr;
+    const otherIds = expiredIds.filter((id: string) => !pendingVerIds.includes(id));
+    if (otherIds.length > 0) {
+      const { error: upErr } = await supabase
+        .from("bookings")
+        .update({ status: "expired" })
+        .in("id", otherIds);
+      if (upErr) throw upErr;
+    }
 
     console.log(`[expireStalePendingBookings] Marked ${staleIds.length} booking(s) as expired.`);
     return staleIds.length;
@@ -1192,7 +1262,7 @@ export async function getSeatsForShipAndDate(
 
   if (bookingData && bookingData.length > 0) {
     // To check overlaps correctly, we need the stop order for this ship
-    const { data: shipData } = await supabase.from("ships").select("stops, route").eq("id", shipId).single();
+    const { data: shipData } = await supabase.from("ships").select("stops, route, departure").eq("id", shipId).single();
     const stops = shipData ? getShipStops(dbToShip(shipData)) : [];
     const stopMap = new Map(stops.map((s, i) => [s.location, i]));
 
@@ -1200,6 +1270,11 @@ export async function getSeatsForShipAndDate(
     const newEnd = alightStop ? stopMap.get(alightStop) : undefined;
 
     for (const b of bookingData) {
+      // A pending booking whose ID verification has timed out (truth expired
+      // at ship departure, or the 24h fallback) does NOT hold the seat.
+      if (b.status === "pending" && b.id_verification_status === "pending" && getIdVerificationDeadline(b.created_at, shipData?.departure || "", tripDate).getTime() <= Date.now()) {
+        continue;
+      }
       // A pending booking past its payment window does NOT hold the seat —
       // unless it's still awaiting ID verification (window starts at approval).
       if (b.status === "pending" && b.id_verification_status !== "pending" && getPaymentDeadline({ createdAt: b.created_at, idVerifiedAt: b.id_verified_at }).getTime() <= Date.now()) {
@@ -1440,6 +1515,24 @@ function dbToScanRecord(row: ScanRecordRow): ScanRecord {
     shipName: row.ship_name, scannedAt: row.scanned_at, isDuplicate: !!row.is_duplicate,
     staffId: row.staff_id || undefined, staffName: row.staff_name || undefined,
   };
+}
+
+/**
+ * Get all boarding scan records for a specific local calendar date (YYYY-MM-DD),
+ * newest first. Uses a timestamp range so each scan appears once per date.
+ */
+export async function getScanRecordsByDate(date: string): Promise<ScanRecord[]> {
+  const start = `${date}T00:00:00`;
+  const d = new Date(date + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  const end = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T00:00:00`;
+  const { data, error } = await supabase
+    .from("scan_records").select("*")
+    .gte("scanned_at", start)
+    .lt("scanned_at", end)
+    .order("scanned_at", { ascending: false });
+  if (error) throw error;
+  return data.map(dbToScanRecord);
 }
 
 // ─── Identity Verification ────────────────────────────────────────────────────

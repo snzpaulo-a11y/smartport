@@ -65,8 +65,16 @@ function drawRow(
   ctx.fillText(value, x, y + valueSize + 2, w - labelWidth);
 }
 
-const CANVAS_W = 618;
-const CANVAS_H = 1024;
+const CANVAS_W = 1081;
+const CANVAS_H = 1789;
+
+// The ticket layout is authored against a 618 x 1024 design space. We scale the
+// entire drawing so the exported PNG is the reference size (1081 x 1789) while
+// keeping the exact same proportions/layout.
+const DESIGN_W = 618;
+const DESIGN_H = 1024;
+const SCALE_X = CANVAS_W / DESIGN_W;
+const SCALE_Y = CANVAS_H / DESIGN_H;
 
 async function drawTicketToCanvas(
   canvas: HTMLCanvasElement,
@@ -76,17 +84,20 @@ async function drawTicketToCanvas(
   routeDisplay: string,
   dateDisplay: string
 ): Promise<string> {
-  const W = CANVAS_W;
-  const H = CANVAS_H;
+  const W = DESIGN_W;
+  const H = DESIGN_H;
   const X = 36;
   const CX = W / 2;
 
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2d context unavailable");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
+
+  // Scale the 618x1024 design to fill the target 1081x1789 canvas.
+  ctx.scale(SCALE_X, SCALE_Y);
 
   const textColor = "#0f172a";
   let y = 175;
@@ -654,7 +665,11 @@ const DigitalTicket = () => {
             <div className="bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 p-6 rounded-2xl w-full text-center">
               <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-80" />
               <p className="font-display font-bold text-xl uppercase tracking-widest mb-1">Booking Expired</p>
-              <p className="text-xs text-zinc-400 mb-5">Payment was not completed within the 3-hour window, so your seat was released.</p>
+              {activeBooking.idVerificationStatus === "rejected" ? (
+                <p className="text-xs text-zinc-400 mb-5">ID verification was not completed in time, so your seat was released.</p>
+              ) : (
+                <p className="text-xs text-zinc-400 mb-5">Payment was not completed within the 3-hour window, so your seat was released.</p>
+              )}
               <button onClick={() => navigate("/booking")}
                 className="w-full py-4 bg-white text-black rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/90 transition-all cursor-pointer">
                 Book Again

@@ -1,5 +1,6 @@
-import { Anchor, LogOut } from "lucide-react";
+import { Anchor, LogOut, LifeBuoy } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/store";
 
 const PassengerHeader = () => {
@@ -19,45 +20,59 @@ const PassengerHeader = () => {
   ];
 
   return (
-    <header className="relative z-50 flex items-center justify-between px-8 py-6 w-full max-w-7xl mx-auto">
-      <div 
-        className="flex items-center gap-2 cursor-pointer" 
-        onClick={() => navigate("/booking")}
-      >
-        <div className="w-9 h-9 rounded-xl bg-white shadow-[0_0_20px_rgba(227,0,15,0.2)] flex items-center justify-center p-0.5">
-          <img src="/starhorse-logo.jpg" alt="Starhorse" className="w-full h-full rounded-lg object-contain" />
+    <header className="sticky top-0 z-50 w-full border-b border-black/[0.06] bg-white/75 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-5 sm:h-[68px] sm:px-8">
+        <div className="flex items-center gap-2.5" onClick={() => navigate("/booking")} role="link" tabIndex={0}>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white p-0.5 shadow-[0_2px_10px_-2px_rgba(227,0,15,0.35)] ring-1 ring-black/5">
+            <img src="/starhorse-logo.jpg" alt="Starhorse" className="h-full w-full rounded-lg object-contain" />
+          </div>
+          <span className="font-display text-xl font-extrabold tracking-tight text-foreground transition-colors sm:text-[1.35rem]">
+            Starhorse
+            <span className="text-primary">.</span>
+          </span>
         </div>
-        <span className="font-display text-xl sm:text-2xl font-extrabold tracking-tight text-slate-800 hover:text-[#E3000F] transition-colors">Starhorse</span>
-      </div>
 
-      <nav className="absolute left-1/2 -translate-x-1/2 hidden lg:flex items-center gap-10 text-[11px] font-bold tracking-widest uppercase mt-1">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <button
-              key={item.name}
-              onClick={() => navigate(item.path)}
-              className={`relative pb-1 transition-all ${
-                isActive ? "text-[#E3000F] font-black" : "text-white/70 hover:text-white font-bold"
-              }`}
-            >
-              {item.name}
-              {isActive && (
-                <span className="absolute bottom-0 left-0 w-full h-[2px] bg-[#E3000F] rounded-full" />
-              )}
-            </button>
-          );
-        })}
-      </nav>
+        <nav className="hidden items-center gap-9 lg:flex">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <button
+                key={item.name}
+                onClick={() => navigate(item.path)}
+                className={cn(
+                  "relative py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-colors",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {item.name}
+                {isActive && (
+                  <span className="absolute inset-x-0 -bottom-0.5 mx-auto h-[2.5px] w-6 rounded-full bg-primary" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
 
-      <div className="flex items-center gap-4">
-        <button 
-          onClick={handleLogout} 
-          className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/50 hover:text-[#E3000F] hover:border-[#E3000F]/30 hover:bg-[#E3000F]/5 transition-all"
-          title="Sign Out"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate("/contact")}
+            className="hidden h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:flex"
+            title="Support"
+            aria-label="Support"
+          >
+            <LifeBuoy className="h-[18px] w-[18px]" />
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-primary"
+            title="Sign Out"
+            aria-label="Sign out"
+          >
+            <LogOut className="h-[18px] w-[18px]" />
+          </button>
+        </div>
       </div>
     </header>
   );

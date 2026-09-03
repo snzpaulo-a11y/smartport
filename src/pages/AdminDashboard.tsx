@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, getScanRecordsByDate, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, deleteReview, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking } from "@/lib/store";
+import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, getScanRecordsByDate, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, deleteReview, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking, getIdVerificationDeadline } from "@/lib/store";
 import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
@@ -1355,6 +1355,10 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                 </div>
+                <div className="px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[9px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  Pending verifications auto-expire once the ship departs — seat is freed if no action is taken
+                </div>
 
                 {verificationBookings.length === 0 ? (
                   <div className="py-24 text-center glass-card rounded-[3rem] border-dashed opacity-40 flex flex-col items-center">
@@ -1425,6 +1429,25 @@ const AdminDashboard = () => {
                               <p className="text-[10px] font-bold text-foreground">{b.trip_date}</p>
                             </div>
                           </div>
+
+                          {(() => {
+                            const shipDep = allShipsForMapping.find(s => s.id === b.ship_id)?.departure;
+                            const deadline = getIdVerificationDeadline(b.created_at, shipDep, b.trip_date);
+                            const remaining = deadline.getTime() - Date.now();
+                            const hours = Math.max(0, Math.floor(remaining / (1000 * 60 * 60)));
+                            const minutes = Math.max(0, Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60)));
+                            const urgent = hours < 4;
+                            return (
+                              <div className={`mb-6 px-4 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest text-center ${urgent ? "bg-destructive/15 text-destructive border border-destructive/30 animate-pulse" : "bg-amber-500/10 text-amber-500 border border-amber-500/20"}`}>
+                                {remaining <= 0
+                                  ? "Verification window expired — seat will be released"
+                                  : shipDep
+                                    ? `Trip departs at ${shipDep} — expires after this`
+                                    : `Auto-expires in ${hours}h ${minutes}m — act before seat is freed`
+                                }
+                              </div>
+                            );
+                          })()}
 
                           <div className="flex gap-3">
                             <button

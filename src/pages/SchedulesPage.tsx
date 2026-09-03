@@ -34,11 +34,11 @@ const SchedulesPage = () => {
       <section className="py-20 px-4 sm:px-8 relative z-10">
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-col mb-16">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E3000F]/10 border border-[#E3000F]/20 text-[9px] font-black uppercase tracking-widest text-[#E3000F] mb-6 w-fit">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/15 text-[10px] font-black uppercase tracking-widest text-primary mb-6 w-fit">
               Sailing Schedules
             </div>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4">Elite Fleet Connections</h2>
-            <p className="text-[#8895A7] text-base font-medium max-w-xl leading-relaxed">
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-slate-900">Elite Fleet Connections</h2>
+            <p className="text-slate-500 text-base font-medium max-w-xl leading-relaxed">
               Real-time travel updates across our premium maritime network. Confirm your sailing times and book your next journey.
             </p>
           </div>
@@ -52,52 +52,52 @@ const SchedulesPage = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={ship.id} 
-                  className="bg-[#131B24] border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col group transition-all hover:border-[#E3000F]/20 shadow-xl"
+                  className="bg-white border border-black/5 rounded-[2.5rem] overflow-hidden flex flex-col group transition-all hover:border-primary/25 hover:shadow-[0_2px_8px_rgba(0,0,0,0.05),0_28px_56px_-28px_rgba(227,0,15,0.25)] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_20px_48px_-28px_rgba(0,0,0,0.18)]"
                 >
                   <div className="px-6 sm:px-10 py-10 flex flex-col">
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
-                      <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight break-words">{ship.route.replace("→", " \u2192 ")}</h3>
+                      <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight break-words">{ship.route.replace("→", " \u2192 ")}</h3>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-[#8895A7] mr-2">{ship.name}</span>
-                        <span className="px-3 py-1.5 rounded-full bg-[#4D0A0F] text-[#E3000F] text-[10px] font-bold tracking-[0.2em] shrink-0 uppercase">
+                        <span className="text-xs font-bold text-slate-500 mr-2">{ship.name}</span>
+                        <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/15 text-primary text-[10px] font-bold tracking-[0.2em] shrink-0 uppercase">
                           {ship.type}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mb-6 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 w-fit">
-                      <Calendar className="w-3 h-3 text-[#E3000F] opacity-60" />
-                      <p className="text-[10px] font-black uppercase tracking-widest text-[#8895A7]">
-                        Schedule: <span className="text-[#E3000F]">{formatSchedule(ship.scheduleDays)}</span>
+                    <div className="flex items-center gap-2 mb-6 px-4 py-2 rounded-xl bg-secondary/50 border border-black/5 w-fit">
+                      <Calendar className="w-3 h-3 text-primary opacity-70" />
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Schedule: <span className="text-primary">{formatSchedule(ship.scheduleDays)}</span>
                       </p>
                     </div>
 
-                    <div className="flex flex-row justify-between mb-6 pb-6 border-b border-white/5">
+                    <div className="flex flex-row justify-between mb-6 pb-6 border-b border-black/5">
                       <div className="text-left space-y-2">
                         <div className="flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-[#8895A7] italic" />
-                          <p className="text-[10px] font-bold tracking-widest text-[#8895A7] uppercase italic">Departure</p>
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Departure</p>
                         </div>
-                        <p className="text-white font-extrabold text-xl sm:text-2xl">{ship.departure}</p>
+                        <p className="text-slate-900 font-extrabold text-xl sm:text-2xl">{ship.departure}</p>
                       </div>
                       <div className="text-right space-y-2">
                         <div className="flex items-center gap-1.5 justify-end">
-                          <p className="text-[10px] font-bold tracking-widest text-[#8895A7] uppercase italic">Estimated Arrival</p>
+                          <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Estimated Arrival</p>
                         </div>
-                        <p className="text-white font-extrabold text-xl sm:text-2xl">{ship.arrival}</p>
+                        <p className="text-slate-900 font-extrabold text-xl sm:text-2xl">{ship.arrival}</p>
                       </div>
                     </div>
 
-                    <div className="mb-8 pb-6 border-b border-white/5 space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-[#8895A7]">Stop Schedules</p>
+                    <div className="mb-8 pb-6 border-b border-black/5 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Stop Schedules</p>
                       {getShipStops(ship).map((stop, sIdx) => {
                         const days = getStopScheduleDays(ship, stop);
                         const label = days.length >= SCHEDULE_DAYS.length ? "Daily" : days.join(", ");
                         const operatingToday = isLegOperating(ship, stop.location, stop.location, today);
                         return (
-                          <div key={sIdx} className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5">
-                            <span className="text-xs font-bold text-white">{stop.location}</span>
-                            <span className={`text-[9px] font-black uppercase tracking-widest ${operatingToday ? "text-[#E3000F]" : "text-[#8895A7] opacity-50"}`}>{label}</span>
+                          <div key={sIdx} className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-secondary/50 border border-black/5">
+                            <span className="text-xs font-bold text-slate-900">{stop.location}</span>
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${operatingToday ? "text-primary" : "text-slate-400 opacity-60"}`}>{label}</span>
                           </div>
                         );
                       })}
@@ -117,10 +117,10 @@ const SchedulesPage = () => {
                         return <button disabled className="w-full bg-red-500/10 border border-red-500/20 text-red-500 font-bold py-5 rounded-2xl text-sm cursor-not-allowed">Trip Cancelled Today</button>;
                       }
                       if (!operating) {
-                        return <button onClick={() => navigate(`/leg-selector/${ship.id}`)} className="w-full bg-amber-500/10 border border-amber-500/20 text-amber-500 font-bold py-5 rounded-2xl hover:bg-amber-500/20 transition-all text-sm">Reserve</button>;
+                        return <button onClick={() => navigate(`/leg-selector/${ship.id}`)} className="w-full bg-amber-500/10 border border-amber-500/20 text-amber-600 font-bold py-5 rounded-2xl hover:bg-amber-500/20 transition-all text-sm active:scale-[0.99]">Reserve</button>;
                       }
                       if (departed) {
-                         return <button disabled className="w-full bg-white/5 border border-white/10 text-white/20 font-bold py-5 rounded-2xl text-sm cursor-not-allowed">Departed Today</button>;
+                         return <button disabled className="w-full bg-secondary/50 border border-black/5 text-slate-400 font-bold py-5 rounded-2xl text-sm cursor-not-allowed">Departed Today</button>;
                       }
                       return (
                         <button
@@ -132,7 +132,7 @@ const SchedulesPage = () => {
                             sessionStorage.removeItem("booking_id_url");
                             navigate(`/leg-selector/${ship.id}`);
                           }}
-                          className="w-full bg-[#1A222C] hover:bg-[#222E3A] border border-white/5 hover:border-[#E3000F]/20 text-white font-bold py-5 rounded-2xl transition-all shadow-md text-sm"
+                          className="w-full bg-[#1A222C] hover:bg-[#222E3A] border border-black/10 hover:border-primary/25 text-white font-bold py-5 rounded-2xl transition-all shadow-md text-sm active:scale-[0.99]"
                         >
                           Book Now
                         </button>
@@ -142,18 +142,18 @@ const SchedulesPage = () => {
                 </motion.div>
               ))
             ) : (
-              <div className="py-20 text-center border border-white/5 rounded-[2.5rem] bg-white/[0.02]">
-                <ShipIcon className="w-12 h-12 text-[#E3000F]/20 mx-auto mb-6" />
-                <h3 className="text-xl font-bold text-white mb-2">No Vessels Scheduled</h3>
-                <p className="text-[#8895A7] text-sm">Please check back later for updated travel schedules.</p>
+              <div className="py-20 text-center border border-black/5 rounded-[2.5rem] bg-white">
+                <ShipIcon className="w-12 h-12 text-primary/20 mx-auto mb-6" />
+                <h3 className="text-xl font-bold text-slate-900 mb-2">No Vessels Scheduled</h3>
+                <p className="text-slate-500 text-sm">Please check back later for updated travel schedules.</p>
               </div>
             )}
           </div>
         </div>
       </section>
 
-      <footer className="py-12 border-t border-white/5 text-center px-6">
-        <p className="text-[10px] font-bold text-[#8895A7] uppercase tracking-widest">© 2024 SmartPort Maritime. Safety first.</p>
+      <footer className="py-12 border-t border-black/5 text-center px-6">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">© 2024 SmartPort Maritime. Safety first.</p>
       </footer>
       <BottomNav />
     </div>
