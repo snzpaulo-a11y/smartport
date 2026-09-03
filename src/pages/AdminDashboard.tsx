@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, deleteReview, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking } from "@/lib/store";
+import { getShips, getStaffList, addStaff, deleteStaff, addShip, deleteShip, toggleShipActive, getScanHistory, getScanRecordsByDate, generateSeatsForShip, Ship, Staff, ScanRecord, StaffRole, SystemLog, getSystemLogs, addSystemLog, getShipStops, Stop, getReviewsByShip, Review, deleteReview, updateIDVerificationStatus, SCHEDULE_DAYS, getLocalDate, getShipById, isStopDeparted, getBookingSiblings, BookingRow as BookingRowData, Booking } from "@/lib/store";
 import {
   ArrowLeft, Users, Ship as ShipIcon, Armchair, Download, LogOut,
   Lock, Unlock, FileText, Loader2, UserPlus, Trash2, Eye, EyeOff,
@@ -198,6 +198,9 @@ const AdminDashboard = () => {
   const [seats, setSeats] = useState<SeatGridRow[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
+  const [historyDate, setHistoryDate] = useState<string>(today);
+  const [historyScanRecords, setHistoryScanRecords] = useState<ScanRecord[]>([]);
+  const [historyScanLoading, setHistoryScanLoading] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [allShipsForMapping, setAllShipsForMapping] = useState<Ship[]>([]);
   const [selectedShipId, setSelectedShipId] = useState<string | null>(null);
@@ -328,6 +331,27 @@ const AdminDashboard = () => {
   useEffect(() => {
     getStaffList(adminType).then(setStaffList);
   }, [adminType, selectedShipId, activeTab]);
+
+  // Load boarding scan history for the calendar date selected in the History tab.
+  const loadHistoryScanRecords = useCallback(async (date: string) => {
+    if (!selectedShipId) { setHistoryScanRecords([]); return; }
+    setHistoryScanLoading(true);
+    try {
+      const records = await getScanRecordsByDate(date);
+      const ship = ships.find(s => s.id === selectedShipId);
+      setHistoryScanRecords(ship ? records.filter(r => r.shipName === ship.name) : records);
+    } catch (err) {
+      console.error("Failed to load scan history:", err);
+      setHistoryScanRecords([]);
+    } finally {
+      setHistoryScanLoading(false);
+    }
+  }, [selectedShipId, ships]);
+
+  useEffect(() => {
+    if (activeTab !== "history") return;
+    loadHistoryScanRecords(historyDate);
+  }, [activeTab, historyDate, selectedShipId, loadHistoryScanRecords]);
 
   const handleUpdateVessel = async () => {
     if (!selectedShipId || !currentShip) return;
@@ -906,6 +930,57 @@ const AdminDashboard = () => {
 
             {activeTab === "history" && (
               <div className="space-y-10">
+                {/* Scan History by Calendar Date */}
+                <div className="glass-card rounded-[2rem] p-6 border-border/50">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <h2 className="text-lg font-black text-foreground tracking-tight">Scan History</h2>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60 mt-1">Boarding scans for {currentShip?.name || "selected vessel"} — pick any date</p>
+                    </div>
+                    <input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)}
+                      className="bg-muted px-4 py-2 rounded-xl text-xs font-bold border-none outline-none shrink-0" />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-5 text-[9px] font-black uppercase tracking-widest">
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">{historyScanRecords.filter(r => !r.isDuplicate).length} Boarded</span>
+                    <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500">{historyScanRecords.filter(r => r.isDuplicate).length} Duplicates</span>
+                    <span className="px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">{historyScanRecords.length} Total</span>
+                  </div>
+
+                  {historyScanLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-14 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Loading scan history...</span>
+                    </div>
+                  ) : historyScanRecords.length === 0 ? (
+                    <div className="py-16 text-center glass-card rounded-[2rem] border-dashed opacity-40 font-black text-xs uppercase tracking-widest">
+                      No Scans Recorded
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {historyScanRecords.map(r => (
+                        <div key={r.id} className="glass-card rounded-2xl p-4 flex items-center justify-between gap-3 border-border/50 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-2 h-10 rounded-full ${r.isDuplicate ? "bg-amber-500" : "bg-emerald-500"}`} />
+                            <div className="min-w-0">
+                              <p className="font-bold text-foreground text-sm tracking-tight truncate">{r.passengerName}</p>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Seat {r.seatLabel} · {r.shipName}</p>
+                              <p className="text-[10px] text-primary/70 font-bold mt-1 uppercase tracking-tighter">
+                                {new Date(r.scannedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} · {new Date(r.scannedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {r.staffName || "Staff"}
+                              </p>
+                            </div>
+                          </div>
+                          {r.isDuplicate ? (
+                            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">Duplicate</span>
+                          ) : (
+                            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">Boarded</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center justify-between">
                   <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Trip Archives</h3>
                   <History className="w-4 h-4 text-muted-foreground/30" />
@@ -1033,23 +1108,13 @@ const AdminDashboard = () => {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {[
-                    { id: "q1", label: "Q1: Real-time booking & seat reservation", category: "Functional Suitability" },
-                    { id: "q2", label: "Q2: Booking confirmation & digital ticket", category: "Functional Suitability" },
-                    { id: "q3", label: "Q3: QR code generation & gate scan validation", category: "Functional Suitability" },
-                    { id: "q4", label: "Q4: Website load speed & payment flow", category: "Performance Efficiency" },
-                    { id: "q5", label: "Q5: QR scan speed at boarding area", category: "Performance Efficiency" },
-                    { id: "q6", label: "Q6: Cross-browser consistency", category: "Compatibility" },
-                    { id: "q7", label: "Q7: Responsive screen size adaptivity", category: "Compatibility" },
-                    { id: "q8", label: "Q8: Admin payment confirmation & verification", category: "Compatibility" },
-                    { id: "q9", label: "Q9: Clean & intuitive UI navigation", category: "Usability" },
-                    { id: "q10", label: "Q10: Vessel seat selection map usability", category: "Usability" },
-                    { id: "q11", label: "Q11: Error & validation message guidance", category: "Usability" },
-                    { id: "q12", label: "Q12: Double-booking prevention", category: "Reliability" },
-                    { id: "q13", label: "Q13: Graceful error handling", category: "Reliability" },
-                    { id: "q14", label: "Q14: Booking & payment data accuracy", category: "Reliability" },
-                    { id: "q15", label: "Q15: Login & credential security", category: "Security" },
-                    { id: "q16", label: "Q16: Personal info privacy", category: "Security" },
-                    { id: "q17", label: "Q17: QR fraud & duplicate prevention", category: "Security" }
+                    { id: "q1", label: "Q1: Booking, ticketing & QR validation accuracy", category: "Functional Suitability" },
+                    { id: "q2", label: "Q2: System response speed (schedules, payments, tickets)", category: "Performance Efficiency" },
+                    { id: "q3", label: "Q3: Cross-browser & device compatibility", category: "Compatibility" },
+                    { id: "q4", label: "Q4: Interface & instruction clarity", category: "Usability" },
+                    { id: "q5", label: "Q5: Double-booking prevention & record accuracy", category: "Reliability" },
+                    { id: "q6", label: "Q6: Personal & booking information security", category: "Security" },
+                    { id: "q7", label: "Q7: Easy access on any device, no installation", category: "Portability" }
                   ].map((q) => {
                     const valueMap: Record<string, number> = {
                       "Strongly Disagree": 1,

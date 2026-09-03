@@ -718,23 +718,13 @@ export default function SuperAdminDashboard() {
                   {/* Survey Summary */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {[
-                      { id: "q1", label: "Q1: Real-time booking & seat reservation", category: "Functional Suitability" },
-                      { id: "q2", label: "Q2: Booking confirmation & digital ticket", category: "Functional Suitability" },
-                      { id: "q3", label: "Q3: QR code generation & gate scan validation", category: "Functional Suitability" },
-                      { id: "q4", label: "Q4: Website load speed & payment flow", category: "Performance Efficiency" },
-                      { id: "q5", label: "Q5: QR scan speed at boarding area", category: "Performance Efficiency" },
-                      { id: "q6", label: "Q6: Cross-browser consistency", category: "Compatibility" },
-                      { id: "q7", label: "Q7: Responsive screen size adaptivity", category: "Compatibility" },
-                      { id: "q8", label: "Q8: Admin payment confirmation & verification", category: "Compatibility" },
-                      { id: "q9", label: "Q9: Clean & intuitive UI navigation", category: "Usability" },
-                      { id: "q10", label: "Q10: Vessel seat selection map usability", category: "Usability" },
-                      { id: "q11", label: "Q11: Error & validation message guidance", category: "Usability" },
-                      { id: "q12", label: "Q12: Double-booking prevention", category: "Reliability" },
-                      { id: "q13", label: "Q13: Graceful error handling", category: "Reliability" },
-                      { id: "q14", label: "Q14: Booking & payment data accuracy", category: "Reliability" },
-                      { id: "q15", label: "Q15: Login & credential security", category: "Security" },
-                      { id: "q16", label: "Q16: Personal info privacy", category: "Security" },
-                      { id: "q17", label: "Q17: QR fraud & duplicate prevention", category: "Security" }
+                      { id: "q1", label: "Q1: Booking, ticketing & QR validation accuracy", category: "Functional Suitability" },
+                      { id: "q2", label: "Q2: System response speed (schedules, payments, tickets)", category: "Performance Efficiency" },
+                      { id: "q3", label: "Q3: Cross-browser & device compatibility", category: "Compatibility" },
+                      { id: "q4", label: "Q4: Interface & instruction clarity", category: "Usability" },
+                      { id: "q5", label: "Q5: Double-booking prevention & record accuracy", category: "Reliability" },
+                      { id: "q6", label: "Q6: Personal & booking information security", category: "Security" },
+                      { id: "q7", label: "Q7: Easy access on any device, no installation", category: "Portability" }
                     ].map((q) => {
                       const valueMap: Record<string, number> = {
                         "Strongly Disagree": 1,
