@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline, BookingRow } from "@/lib/store";
+import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline, parseDepartureTime, BookingRow } from "@/lib/store";
 import {
   ScanLine, ArrowLeft, Keyboard, AlertTriangle,
   CheckCircle, XCircle, Camera, CameraOff, Loader2, ShieldAlert, X, LogOut, Users, Wallet
@@ -231,6 +231,18 @@ const ScannerPage = () => {
         });
         return;
       }
+      // ── Validation Phase 3: Departure Time Check ──
+      // Only mark a passenger as boarded once the ship has actually departed.
+      const departureDatetime = ship?.departure ? parseDepartureTime(ship.departure, ticketDate) : null;
+      if (departureDatetime && Date.now() < departureDatetime.getTime()) {
+        setScanResult({
+          type: "invalid",
+          message: `Boarding for this trip opens at ${ship.departure} — not yet time`,
+          booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label }
+        });
+        return;
+      }
+
       const isDuplicate = booking.status === "boarded";
 
       // Mark boarded first, then record the scan — so a failed status update
