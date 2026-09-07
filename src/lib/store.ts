@@ -1418,6 +1418,33 @@ export function dbToBooking(row: BookingRow): Booking {
 }
 
 /**
+ * Find a live (not cancelled/expired) booking for a seat + trip. Used to make
+ * booking creation idempotent: if a passenger re-enters the flow for the same
+ * seat (refresh / browser back / repeat payment), we reuse the existing booking
+ * instead of inserting a duplicate row that shows up as "two same tickets".
+ */
+export async function findLiveBookingForSeat(
+  shipId: string,
+  seatId: string,
+  tripDate: string,
+  phone?: string
+): Promise<Booking | null> {
+  let query = supabase
+    .from("bookings")
+    .select("*")
+    .eq("ship_id", shipId)
+    .eq("seat_id", seatId)
+    .eq("trip_date", tripDate)
+    .in("status", ["pending", "counter", "paid"])
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (phone) query = query.eq("phone", phone);
+  const { data, error } = await query.maybeSingle();
+  if (error) return null;
+  return data ? dbToBooking(data) : null;
+}
+
+/**
  * Save a booking — does NOT change seat status in the seats table.
  * Seats are determined available/booked by querying bookings table per date.
  * Status should be "pending" until payment confirmed.

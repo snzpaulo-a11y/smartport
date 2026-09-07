@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getSeatsForShipAndDate, getLocalDate, generateId, uploadIDImage, getCurrentUser, saveBooking, Booking, Ship, Seat } from "@/lib/store";
+import { getShipById, getSeatsForShipAndDate, getLocalDate, generateId, uploadIDImage, getCurrentUser, saveBooking, findLiveBookingForSeat, Booking, Ship, Seat } from "@/lib/store";
 import { ArrowLeft, User, Phone, Mail, Tag, AlertTriangle, Shield, CheckCircle, Camera, Loader2 } from "lucide-react";
 import IdentityCenter from "@/components/IdentityCenter";
 
@@ -131,9 +131,20 @@ const TicketPreview = () => {
         alert("Missing booking details. Please ensure your name and phone number are entered correctly.");
         return null;
       }
+
+      // Reuse an existing live booking for this seat+trip so a refresh / back
+      // navigation / repeated attempt never creates a duplicate ticket. The DB
+      // lookup wins over the session id (which may belong to a different seat).
+      let bookingIdToUse = currentBookingId;
+      const existing = await findLiveBookingForSeat(shipId!, seatId!, tripDate, phone);
+      if (existing) {
+        bookingIdToUse = existing.id;
+      } else if (sessionStorage.getItem("current_booking_id")) {
+        bookingIdToUse = sessionStorage.getItem("current_booking_id")!;
+      }
       
       const bookingData: Booking = {
-        id: currentBookingId,
+        id: bookingIdToUse,
         shipId: shipId!,
         seatId: seatId!,
         seatLabel: seat.label,
@@ -142,7 +153,7 @@ const TicketPreview = () => {
         phone: phone,
         email: email || undefined,
         status: overrideStatus || "pending",
-        qrCode: `SPT-${currentBookingId}`,
+        qrCode: `SPT-${bookingIdToUse}`,
         createdAt: new Date().toISOString(),
         tripDate: tripDate || getLocalDate(),
         boardStop: boardStop || undefined,
@@ -155,7 +166,7 @@ const TicketPreview = () => {
       };
       console.log("[persistBooking] Data to save:", bookingData);
       await saveBooking(bookingData);
-      console.log("[persistBooking] Save successful: " + currentBookingId);
+      console.log("[persistBooking] Save successful: " + bookingIdToUse);
       return true;
     } catch (err) {
       console.error("[persistBooking] CRITICAL FAILURE:", err);

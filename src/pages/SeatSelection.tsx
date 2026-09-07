@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, Booking, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser } from "@/lib/store";
+import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, Booking, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser, findLiveBookingForSeat } from "@/lib/store";
 import { ArrowLeft, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
 import { PageSkeleton } from "@/components/ui/PageSkeleton";
 import BiometricScanner from "@/components/BiometricScanner";
@@ -148,40 +148,56 @@ const SeatSelection = () => {
   useEffect(() => { setSelectedSeatIds([]); }, [seatTypeChoice]);
 
   useEffect(() => {
-    if (step === "passenger") {
-      // Cancel any bookings saved during a previous pass through this step so
-      // their seats aren't held forever by unreachable orphaned rows.
+    if (step !== "passenger") return;
+    let cancelled = false;
+
+    (async () => {
+      // Only clean up bookings that were created this session but never made it
+      // to review (tracked in persistedBookingIdsRef). Live bookings already in
+      // the DB for these seats are reused, never deleted.
       const staleIds = [...persistedBookingIdsRef.current];
       if (staleIds.length > 0) {
         persistedBookingIdsRef.current = new Set();
-        staleIds.forEach(async (id) => {
-          try {
-            await deleteBooking(id);
-          } catch (err) {
+        await Promise.all(staleIds.map(async (id) => {
+          try { await deleteBooking(id); } catch (err) {
             console.error("Failed to cancel stale group booking:", id, err);
           }
-        });
+        }));
       }
+
       const selectedSeatsList = seats.filter(s => selectedSeatIds.includes(s.id));
+
+      // Fetch any live booking already held on these seats so re-entering the
+      // group form never creates a duplicate ticket for the same seat+trip.
+      const existingMap = new Map<string, Booking>();
+      await Promise.all(selectedSeatsList.map(async (seat) => {
+        const existing = await findLiveBookingForSeat(shipId!, seat.id, tripDate, phone);
+        if (existing) existingMap.set(seat.id, existing);
+      }));
+      if (cancelled) return;
+
       const initialPassengers = selectedSeatsList.map((seat, index) => {
         const type = routeGroups[index] || "regular";
+        const existing = existingMap.get(seat.id);
         return {
-          name: "",
-          phone: "",
-          email: "",
+          name: existing?.passengerName || "",
+          phone: existing?.phone || "",
+          email: existing?.email || "",
           type: type,
-          verified: false,
+          verified: existing ? existing.idVerificationStatus !== "rejected" : false,
           verifiedScore: 0,
-          idImageUrl: null,
-          idVerificationStatus: type === "regular" ? ("none" as const) : ("pending" as const),
-          bookingId: generateId(),
+          idImageUrl: existing?.idImageUrl || null,
+          idVerificationStatus: existing?.idVerificationStatus || (type === "regular" ? ("none" as const) : ("pending" as const)),
+          bookingId: existing?.id || generateId(),
           seatId: seat.id,
           seatLabel: seat.label
         };
       });
-      setPassengers(initialPassengers);
-    }
-  }, [step, seats, selectedSeatIds, routeGroups]);
+      if (!cancelled) setPassengers(initialPassengers);
+    })();
+
+    return () => { cancelled = true; };
+  }, [step, seats, selectedSeatIds, routeGroups, shipId, tripDate, phone]);
 
   if (loading) return (
     <div className="min-h-screen bg-[#060B11]">
@@ -655,6 +671,18 @@ const SeatSelection = () => {
                         
                         let bId = sessionStorage.getItem("current_booking_id");
                         
+                        // Reuse an existing live booking for this seat+trip so a
+                        // refresh/back/re-click never creates a duplicate ticket.
+                        if (!bId) {
+                          const existing = await findLiveBookingForSeat(
+                            shipId!, selectedSeatIds[0] || "", tripDate, phone
+                          );
+                          if (existing) {
+                            bId = existing.id;
+                            sessionStorage.setItem("current_booking_id", bId);
+                          }
+                        }
+                        
                         // If regular passenger, we save now to lock the seat
                         if (!bId && passType === "Regular") {
                           bId = generateId();                          try {
@@ -767,8 +795,16 @@ const SeatSelection = () => {
                 persistedBookingIdsRef.current.add(currentPassenger.bookingId);
 
               } else {
-                // REUSE existing ID if we have one to avoid "Ghost" tickets
-                const bId = sessionStorage.getItem("current_booking_id");
+                // REUSE existing ID if we have one to avoid "Ghost" tickets /
+                // duplicate rows on refresh. Falls back to a live booking that
+                // already exists in the DB for this seat+trip.
+                let bId = sessionStorage.getItem("current_booking_id");
+                if (!bId) {
+                  const existing = await findLiveBookingForSeat(
+                    shipId!, selectedSeatIds[0] || "", tripDate, phone
+                  );
+                  if (existing) bId = existing.id;
+                }
                 const bookingIdToUse = bId || generateId();
                 
                 const url = await uploadIDImage(bookingIdToUse, fileBlob);
