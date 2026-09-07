@@ -1937,6 +1937,17 @@ export async function hasReviewForBooking(bookingId: string): Promise<boolean> {
 }
 
 export async function deleteReview(id: string): Promise<void> {
-  const { error } = await supabase.from("reviews").delete().eq("id", id);
-  if (error) throw error;
+  const { data, error } = await supabase.rpc("review_delete", { p_id: id });
+  if (error && !isMissingFunctionError(error)) throw error;
+
+  if (error) {
+    // Legacy fallback (pre-migration).
+    const { error: legacyError } = await supabase.from("reviews").delete().eq("id", id);
+    if (legacyError) throw legacyError;
+  }
+
+  const deletedCount = Array.isArray(data) ? Number(data[0] ?? data) : Number(data ?? 0);
+  if (deletedCount === 0) {
+    throw new Error("Evaluation could not be deleted (0 rows removed). Run the review_delete migration on Supabase first.");
+  }
 }
