@@ -11,19 +11,19 @@ interface FeedbackModalProps {
 
 const QUESTIONS = [
   // Functional Suitability
-  { id: "q1", label: "Booking, ticketing, and QR validation work accurately.", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] },
+  { id: "q1", label: "Booking, ticketing, and QR validation work accurately.", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] },
   // Performance Efficiency
-  { id: "q2", label: "The system responds quickly (schedules, payments, tickets).", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] },
+  { id: "q2", label: "The system responds quickly (schedules, payments, tickets).", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] },
   // Compatibility
-  { id: "q3", label: "The system works well on different browsers and devices.", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] },
+  { id: "q3", label: "The system works well on different browsers and devices.", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] },
   // Usability
-  { id: "q4", label: "The interface and instructions are clear and easy to use.", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] },
+  { id: "q4", label: "The interface and instructions are clear and easy to use.", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] },
   // Reliability
-  { id: "q5", label: "The system avoids double-booking and keeps accurate records.", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] },
+  { id: "q5", label: "The system avoids double-booking and keeps accurate records.", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] },
   // Security
-  { id: "q6", label: "My personal and booking information is kept secure.", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] },
+  { id: "q6", label: "My personal and booking information is kept secure.", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] },
   // Portability
-  { id: "q7", label: "The system is easy to access on any device, with no installation needed.", options: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"] }
+  { id: "q7", label: "The system is easy to access on any device, with no installation needed.", options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] }
 ];
 
 export default function FeedbackModal({ isOpen, onClose, onSubmit, passengerName }: FeedbackModalProps) {
