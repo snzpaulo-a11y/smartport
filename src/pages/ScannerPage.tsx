@@ -231,13 +231,24 @@ const ScannerPage = () => {
         });
         return;
       }
-      // ── Validation Phase 3: Departure Time Check ──
-      // Only mark a passenger as boarded once the ship has actually departed.
+      // ── Validation Phase 3: Boarding Window (Arrival → Departure) ──
+      // Scanning/boarding is open from the ship's arrival time until it departs.
+      const nowMs = Date.now();
+      const arrivalDatetime = ship?.arrival ? parseDepartureTime(ship.arrival, ticketDate) : null;
       const departureDatetime = ship?.departure ? parseDepartureTime(ship.departure, ticketDate) : null;
-      if (departureDatetime && Date.now() < departureDatetime.getTime()) {
+
+      if (arrivalDatetime && nowMs < arrivalDatetime.getTime()) {
         setScanResult({
           type: "invalid",
-          message: `Boarding for this trip opens at ${ship.departure} — not yet time`,
+          message: `Boarding opens when the ship arrives at ${ship.arrival} — not yet time`,
+          booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label }
+        });
+        return;
+      }
+      if (departureDatetime && nowMs > departureDatetime.getTime()) {
+        setScanResult({
+          type: "invalid",
+          message: `This trip already departed at ${ship.departure} — no more boarding`,
           booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label }
         });
         return;
