@@ -428,7 +428,7 @@ const ScannerPage = () => {
               </p>
             </div>
           )}
-          <button onClick={() => { setScanResult(null); hasScanned.current = false; }}
+          <button onClick={() => { setScanResult(null); hasScanned.current = false; startCamera(); }}
             className="w-full mt-6 py-4 rounded-xl bg-primary text-[#0A1118] font-bold hover:bg-[#FF3B47] transition-all shadow-[0_0_20px_rgba(227, 0, 15,0.2)]">
             Scan Next Passenger
           </button>
