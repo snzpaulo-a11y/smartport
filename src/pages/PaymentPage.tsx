@@ -186,7 +186,7 @@ const PaymentPage = () => {
       if (isGroup) {
         // PERSIST ALL FINAL PRICES before paying
         const updatePromises = passengers.map(p => 
-          supabase.from("bookings").update({ leg_price: p.price }).eq("id", p.bookingId)
+          supabase.from("bookings").update({ leg_price: p.price, passenger_name: p.name }).eq("id", p.bookingId)
         );
         await Promise.all(updatePromises);
 
@@ -208,7 +208,7 @@ const PaymentPage = () => {
 
       } else {
         // PERSIST THE FINAL PRICE (Discounted or Regular) before paying
-        await supabase.from("bookings").update({ leg_price: finalPrice }).eq("id", bookingId);
+        await supabase.from("bookings").update({ leg_price: finalPrice, passenger_name: name }).eq("id", bookingId);
 
         const amountCentavos = Math.round(finalPrice * 100);
         const session = await createPayMongoCheckout(
