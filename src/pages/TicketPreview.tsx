@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getShipById, getSeatsForShipAndDate, getLocalDate, generateId, uploadIDImage, getCurrentUser, saveBooking, findLiveBookingForSeat, Booking, Ship, Seat } from "@/lib/store";
+import { getShipById, getSeatsForShipAndDate, getLocalDate, generateId, uploadIDImage, getCurrentUser, saveBooking, findLiveBookingForSeat, getShipStops, calcLegPrice, Booking, Ship, Seat } from "@/lib/store";
 import { ArrowLeft, User, Phone, Mail, Tag, AlertTriangle, Shield, CheckCircle, Camera, Loader2 } from "lucide-react";
 import IdentityCenter from "@/components/IdentityCenter";
 
@@ -91,7 +91,11 @@ const TicketPreview = () => {
   );
 
   const pt          = PASSENGER_TYPES.find((p) => p.value === passengerType)!;
-  const basePrice   = legPrice || ship.price;
+  // Never fall back to ship.price: that is the full-route fare, not the fare
+  // for the selected leg. Resolve the leg fare from the ship's stops instead.
+  const basePrice   = legPrice && legPrice > 0
+    ? legPrice
+    : (boardStop && alightStop ? calcLegPrice(getShipStops(ship), boardStop, alightStop) : 0);
   const discount    = pt.discount;
   
   // If not verified, penalty applies instead of discount
@@ -158,7 +162,7 @@ const TicketPreview = () => {
         tripDate: tripDate || getLocalDate(),
         boardStop: boardStop || undefined,
         alightStop: alightStop || undefined,
-        legPrice: legPrice || undefined,
+        legPrice: legPrice || basePrice || undefined,
         idVerified: isIdVerified,
         idImageUrl: uploadedUrl || idImageUrl || undefined,
         idVerificationStatus: overideVerification || idVerificationStatus,

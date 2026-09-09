@@ -130,6 +130,24 @@ const SeatSelection = () => {
     }
   }, [boardStop, alightStop, ship]);
 
+  // If router state was lost (e.g. refresh on a deep link), default to the
+  // ship's origin-to-terminal leg so the fare is always resolved from stops.
+  useEffect(() => {
+    if (!ship) return;
+    const stops = getShipStops(ship);
+    if (stops.length > 0 && !boardStop) setBoardStop(stops[0].location);
+    if (stops.length > 1 && !alightStop) setAlightStop(stops[stops.length - 1].location);
+  }, [ship]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // NEVER fall back to ship.price here: that is the full-route fare (e.g. the
+  // ₱1400 Romblon → Lucena fare), not the fare for the selected leg. If the leg
+  // price is unknown, resolve it from the ship's stops instead.
+  const effectiveLegPrice = currentLegPrice > 0
+    ? currentLegPrice
+    : (ship && boardStop && alightStop
+      ? calcLegPrice(getShipStops(ship), boardStop, alightStop)
+      : 0);
+
   useEffect(() => {
     if (!shipId) return;
     Promise.all([
@@ -466,7 +484,7 @@ const SeatSelection = () => {
                       <p className="text-[#8895A7] text-[10px] font-bold tracking-widest uppercase mb-1">Group Total Amount</p>
                       <p className="text-3xl font-extrabold text-white">
                         ₱{passengers.reduce((sum, p) => {
-                          const base = currentLegPrice || ship.price;
+                          const base = effectiveLegPrice;
                           const discount = p.type === "student" ? 0.2 : p.type === "regular" ? 0 : 0.2;
                           return sum + (base - Math.round(base * discount));
                         }, 0).toFixed(2)}
@@ -476,7 +494,7 @@ const SeatSelection = () => {
                     <button 
                       disabled={passengers.some(p => !p.name || !p.phone || !p.email || (p.type !== "regular" && !p.verified))}
                       onClick={async () => {
-                        const currentBase = currentLegPrice || ship.price;
+                        const currentBase = effectiveLegPrice;
                         const user = await getCurrentUser();
 
                         // Immediate save all bookings to lock their seats
@@ -657,14 +675,14 @@ const SeatSelection = () => {
                     <div>
                       <p className="text-[#8895A7] text-[10px] font-bold tracking-widest uppercase mb-1">Total Amount</p>
                       <p className="text-3xl font-extrabold text-white">
-                        ₱{((currentLegPrice || ship.price) - Math.round((currentLegPrice || ship.price) * (passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.2))).toFixed(2)}
+                        ₱{(effectiveLegPrice - Math.round(effectiveLegPrice * (passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.2))).toFixed(2)}
                       </p>
                     </div>
 
                     <button 
                       disabled={!fullName || !phone || !email || (passType !== "Regular" && !verified)}
                       onClick={async () => {
-                        const currentBase = currentLegPrice || ship.price;
+                        const currentBase = effectiveLegPrice;
                         const discount = passType === "Student" ? 0.2 : passType === "Regular" ? 0 : 0.2;
                         const deduction = Math.round(currentBase * discount);
                         const fPrice = currentBase - deduction;
@@ -702,7 +720,7 @@ const SeatSelection = () => {
                               tripDate: tripDate,
                               boardStop: boardStop || undefined,
                               alightStop: alightStop || undefined,
-                              legPrice: currentLegPrice || undefined,
+                              legPrice: effectiveLegPrice || undefined,
                               idVerified: false,
                               idVerificationStatus: "none",
                               userId: user?.id || null
@@ -719,7 +737,7 @@ const SeatSelection = () => {
                             tripDate, name: fullName, phone, email, passengerType: passType.toLowerCase(), 
                             price: fPrice, basePrice: currentBase, deduction, verified, verifiedScore,
                             idImageUrl, idVerificationStatus: passType === "Regular" ? "none" : "pending",
-                            boardStop, alightStop, legPrice: currentLegPrice,
+                            boardStop, alightStop, legPrice: effectiveLegPrice,
                             bookingType: (location.state as { bookingType?: string } | null)?.bookingType,
                             seatLabel: selectedSeat.label,
                             shipName: ship.name
@@ -765,7 +783,7 @@ const SeatSelection = () => {
 
                 // Immediate save to lock seat and submit ID for this group member
                 const user = await getCurrentUser();
-                const currentBase = currentLegPrice || ship.price;
+                const currentBase = effectiveLegPrice;
                 const discount = currentPassenger.type === "student" ? 0.2 : currentPassenger.type === "regular" ? 0 : 0.2;
                 const deduction = Math.round(currentBase * discount);
                 const fPrice = currentBase - deduction;
@@ -832,7 +850,7 @@ const SeatSelection = () => {
                   tripDate: tripDate,
                   boardStop: boardStop || undefined,
                   alightStop: alightStop || undefined,
-                  legPrice: currentLegPrice || undefined,
+                  legPrice: effectiveLegPrice || undefined,
                   idVerified: true,
                   idImageUrl: url,
                   idVerificationStatus: "pending",

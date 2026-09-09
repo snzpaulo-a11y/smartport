@@ -1028,7 +1028,7 @@ export function calcLegPrice(stops: Stop[], from: string, to: string): number {
   const fromIdx = stops.findIndex((s) => s.location === from);
   const toIdx = stops.findIndex((s) => s.location === to);
   if (fromIdx === -1 || toIdx === -1 || toIdx <= fromIdx) return 0;
-  return stops[toIdx].price || 0;
+  return Math.max(0, (stops[toIdx].price || 0) - (stops[fromIdx].price || 0));
 }
 
 // ─── Seats ────────────────────────────────────────────────────────────────────
