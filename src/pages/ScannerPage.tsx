@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline, parseDepartureTime, BookingRow } from "@/lib/store";
+import { addScanRecord, updateBooking, generateId, getLocalDate, getCounterDeadline, BookingRow } from "@/lib/store";
 import {
   ScanLine, ArrowLeft, Keyboard, AlertTriangle,
   CheckCircle, XCircle, Camera, CameraOff, Loader2, ShieldAlert, X, LogOut, Users, Wallet
@@ -231,28 +231,8 @@ const ScannerPage = () => {
         });
         return;
       }
-      // ── Validation Phase 3: Boarding Window (Arrival → Departure) ──
-      // Scanning/boarding is open from the ship's arrival time until it departs.
-      const nowMs = Date.now();
-      const arrivalDatetime = ship?.arrival ? parseDepartureTime(ship.arrival, ticketDate) : null;
-      const departureDatetime = ship?.departure ? parseDepartureTime(ship.departure, ticketDate) : null;
-
-      if (arrivalDatetime && nowMs < arrivalDatetime.getTime()) {
-        setScanResult({
-          type: "invalid",
-          message: `Boarding opens when the ship arrives at ${ship.arrival} — not yet time`,
-          booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label }
-        });
-        return;
-      }
-      if (departureDatetime && nowMs > departureDatetime.getTime()) {
-        setScanResult({
-          type: "invalid",
-          message: `This trip already departed at ${ship.departure} — no more boarding`,
-          booking: { passengerName: booking.passenger_name, passengerType: booking.passenger_type, seatLabel: booking.seat_label }
-        });
-        return;
-      }
+      // ── Validation Phase 3: Boarding Window ──
+      // Scanning is allowed at any time of day; only the trip date is enforced.
 
       const isDuplicate = booking.status === "boarded";
 
