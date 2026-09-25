@@ -351,20 +351,57 @@ export default function LoginPage() {
         } else {
           // Verify OTP flow
           if (otp.length !== 6) throw new Error("Please enter the 6-digit code");
-          // Verify Custom OTP (Both Email and Phone are now manual)
-          if (otp.trim() !== generatedOtp.trim()) throw new Error(`Invalid OTP Code! Expected: ${generatedOtp}, Got: ${otp}`);
+          if (otp.trim() !== generatedOtp.trim()) throw new Error("Invalid OTP code. Please check the code and try again.");
 
-          let authIdentifier = phone;
-          if (!isEmailMethod) {
-            // Generate seamless shadow credentials for the phone user
-            authIdentifier = `${phone.replace(/\D/g, "")}@smartport.ph`;
+          const authIdentifier = isEmailMethod
+            ? phone.trim()
+            : `${phone.replace(/\D/g, "")}@smartport.ph`;
+
+          // Register first. signUp() flags an already-registered address with
+          // fallbackSignIn rather than throwing, so a retried registration is
+          // handled here instead of surfacing as a bogus credential error.
+          const result = await signUp(authIdentifier, signupPassword, name);
+
+          if (result.fallbackSignIn) {
+            // Account already exists, so this is really a login. A mismatched
+            // password is the genuine failure and should say so.
+            try {
+              await signIn(authIdentifier, signupPassword);
+            } catch (signInErr) {
+              console.warn("Existing-account sign-in failed after OTP:", signInErr);
+              setOtpStep(false);
+              setOtp("");
+              throw new Error(
+                isEmailMethod
+                  ? "An account with this email already exists. Log in instead, or reset your password."
+                  : "An account with this phone number already exists. Log in instead, or reset your password.",
+              );
+            }
+            navigate("/booking");
+            return;
           }
 
-          const signUpResult = await signUp(authIdentifier, signupPassword, name);
+          // A brand new account returns a session immediately unless Supabase
+          // email confirmation is enabled, which leaves the account
+          // unverified and makes the follow-up signIn() fail.
+          if (result.session) {
+            navigate("/booking");
+            return;
+          }
 
-          // Sign in automatically after verification
-          await signIn(authIdentifier, signupPassword);
-          navigate("/booking");
+          try {
+            await signIn(authIdentifier, signupPassword);
+            navigate("/booking");
+          } catch (signInErr) {
+            console.warn("Post-signup sign-in failed:", signInErr);
+            setOtpStep(false);
+            setOtp("");
+            throw new Error(
+              isEmailMethod
+                ? "Account created. Check your inbox to confirm your email address, then sign in."
+                : "Account created but not yet activated. Please try signing in again in a moment.",
+            );
+          }
         }
 
       }
