@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getShipById, getSeatsForShipAndDate, getLocalDate, Seat, Ship, Booking, getShipStops, calcLegPrice, generateId, uploadIDImage, saveBooking, deleteBooking, getCurrentUser, findLiveBookingForSeat } from "@/lib/store";
 import { ArrowLeft, BedDouble, Armchair, User, GraduationCap, Accessibility, Sailboat, Globe, Share2, CircleUserRound, Phone, Mail, Tag, AlertTriangle, QrCode, Home, Calendar, Ship as ShipIcon, Clock, ShieldCheck, Camera, Route, ChevronDown, ArrowRight, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/PageSkeleton";
 import BiometricScanner from "@/components/BiometricScanner";
 
@@ -462,6 +463,10 @@ const SeatSelection = () => {
                             <button
                               type="button"
                               onClick={() => {
+                                if (!p.name || p.name.trim().length < 2) {
+                                  toast.error("Please enter the passenger's full name before uploading their ID.");
+                                  return;
+                                }
                                 setActivePassengerIdx(idx);
                                 setScannerOpen(true);
                               }}
@@ -652,9 +657,13 @@ const SeatSelection = () => {
                           <p className="text-white/50 text-xs leading-relaxed mb-3">
                             To claim the <span className="text-white font-bold">{passType === "Student" ? "Student" : passType === "PWD" ? "PWD" : "Senior"} discount</span>, you must provide a clear photo of your valid ID.
                           </p>
-                          <button
+                           <button
                             type="button"
                             onClick={() => {
+                              if (!fullName || fullName.trim().length < 2) {
+                                toast.error("Please enter your full name before uploading your ID.");
+                                return;
+                              }
                               setPendingPassType(passType);
                               setScannerOpen(true);
                             }}
@@ -793,7 +802,7 @@ const SeatSelection = () => {
                   shipId: shipId!,
                   seatId: currentPassenger.seatId,
                   seatLabel: currentPassenger.seatLabel,
-                  passengerName: currentPassenger.name || "Pending Name",
+                  passengerName: currentPassenger.name || "Guest",
                   passengerType: currentPassenger.type.toLowerCase() as Booking["passengerType"],
                   phone: currentPassenger.phone || "0000000000",
                   email: currentPassenger.email || undefined,
@@ -840,7 +849,7 @@ const SeatSelection = () => {
                   shipId: shipId!,
                   seatId: selectedSeatIds[0] || "",
                   seatLabel: selectedSeat?.label || "",
-                  passengerName: fullName || "Pending Name",
+                  passengerName: fullName || "Guest",
                   passengerType: pType.toLowerCase() as Booking["passengerType"],
                   phone: phone || "0000000000",
                   email: email || undefined,
